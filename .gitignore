@@ -1,0 +1,16 @@
+# Modelos
+models/*.pt
+
+# Videos de prueba
+data/videos/*.mp4
+
+# Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+eventos.log
+
+# Temp
+*.tmp
