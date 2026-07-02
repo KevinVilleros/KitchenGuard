@@ -3,3 +3,4 @@ ultralytics>=8.3.0
 torch>=2.5.0
 numpy>=1.26.0
 Pillow>=11.0.0
+gradio>=6.0.0

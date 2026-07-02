@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """CocinaP - Sistema de Seguridad en Cocina
 Uso:
-  python main.py             →  Cámara en vivo
-  python main.py test --video ruta  →  Prueba con video
-  python main.py web         →  App web con subida de video
+  python main.py            Cámara en vivo
+  python main.py test       Probar con video (selector de archivos)
 """
 import sys
 import os
@@ -13,12 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def cmd_camera():
     from cocinap.camera.handler import CameraHandler
-    from cocinap.detector.detector import Detector
-    from cocinap.analyzer.risk_analyzer import RiskAnalyzer
-    from cocinap.alarm.sound_alarm import SoundAlarm
-    from cocinap.utils.visuals import draw_detections
-    from cocinap.config import DETECTION_INTERVAL
-
+    from cocinap.engine import CocinaPEngine
     import cv2
     import time
 
@@ -26,29 +20,13 @@ def cmd_camera():
     print("Inicializando...")
 
     camera = CameraHandler()
-    detector = Detector()
-    analyzer = RiskAnalyzer()
-    alarm = SoundAlarm()
+    engine = CocinaPEngine(camera.get_frame)
 
     print("Conectando cámara...")
     camera.start()
-    time.sleep(1)
+    engine.start()
+    time.sleep(2)
     print("Listo. Presiona ESC o 'q' para salir.")
-
-    last_detection_time = 0
-    last_detections = {
-        "persons": 0,
-        "kitchen_objects": [],
-        "fire": [], "fire_coverage": 0.0, "fire_movement_valid": True,
-        "smoke": [], "smoke_coverage": 0.0,
-        "pots_on_stove": [],
-        "stove_zone": (0, 0, 0, 0),
-        "frame_size": (0, 0),
-    }
-    last_alerts = []
-    fps_display = 0
-    frame_count = 0
-    fps_timer = time.time()
 
     window_name = "CocinaP - Seguridad en Cocina"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -58,44 +36,15 @@ def cmd_camera():
         while True:
             frame = camera.get_frame()
             if frame is None:
-                time.sleep(0.01)
+                time.sleep(0.005)
                 continue
 
-            frame_count += 1
-            if time.time() - fps_timer >= 0.5:
-                fps_display = frame_count / (time.time() - fps_timer + 0.001)
-                frame_count = 0
-                fps_timer = time.time()
-
-            current_time = time.time()
-            if current_time - last_detection_time >= DETECTION_INTERVAL:
-                result = detector.detect(frame)
-                last_detections = detector.get_detection_summary(result, frame)
-                last_detection_time = current_time
-
-            last_alerts = analyzer.analyze(last_detections)
-
-            trigger, alarm_type = analyzer.should_trigger_alarm(last_alerts)
-            if trigger:
-                if alarm_type == "fire":
-                    alarm.start_fire()
-                elif alarm_type == "unattended":
-                    alarm.start_unattended()
-            elif not last_alerts:
-                alarm.stop()
-
-            unattended_minutes = 0
-            if not last_detections.get("persons", 0) > 0 and len(last_detections.get("pots_on_stove", [])) > 0:
-                unattended_minutes = (time.time() - analyzer.last_person_time) / 60.0
-
-            status_text = analyzer.get_status_text(last_alerts, last_detections)
-            status_color = analyzer.get_status_color(last_alerts)
-
-            display = draw_detections(
-                frame, last_detections, last_alerts,
-                status_text, status_color, fps_display,
-                unattended_minutes=unattended_minutes,
-            )
+            engine.track_fps()
+            dets = engine.get_latest()
+            alerts, _, _ = engine.analyze(dets)
+            unattended = engine.get_unattended(dets)
+            status_text, status_color = engine.get_status(alerts, dets)
+            display = engine.draw(frame, dets, alerts, status_text, status_color, engine.fps, unattended)
 
             cv2.imshow(window_name, display)
 
@@ -107,23 +56,18 @@ def cmd_camera():
         pass
     finally:
         print("Deteniendo sistema...")
-        alarm.stop()
+        engine.stop()
         camera.stop()
         cv2.destroyAllWindows()
         print("Sistema detenido.")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "test" and "--video" in sys.argv:
-            idx = sys.argv.index("--video") + 1
-            if idx < len(sys.argv):
-                from scripts.test_video import run_test
-                run_test(sys.argv[idx])
-        elif sys.argv[1] == "web":
-            from scripts.upload_test import launch_web
-            launch_web()
-        else:
-            print(__doc__)
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        from cocinap.test_app import run_test
+        video = sys.argv[2] if len(sys.argv) > 2 else None
+        run_test(video)
+    elif len(sys.argv) > 1:
+        print(__doc__)
     else:
         cmd_camera()

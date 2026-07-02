@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "cocinap"
+version = "0.1.0"
+description = "Sistema de Seguridad en Cocina con YOLO11 + OpenCV"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-contrib-python>=4.10.0",
+    "ultralytics>=8.3.0",
+    "torch>=2.5.0",
+    "numpy>=1.26.0",
+    "Pillow>=11.0.0",
+    "gradio>=6.0.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["cocinap*"]

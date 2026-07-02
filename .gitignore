@@ -1,16 +1,27 @@
-# Modelos
+# Modelos (descargar por separado)
 models/*.pt
 
-# Videos de prueba
+# Videos de prueba (agregar manualmente)
 data/videos/*.mp4
 
 # Cache
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 
 # Logs
-eventos.log
+logs/*.log
 
 # Temp
 *.tmp
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -11,15 +11,32 @@ def draw_detections(frame, detections, alerts, status_text, status_color, fps, u
 
     for fire in detections["fire"]:
         x, y, w, h = fire["bbox"]
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-        cv2.putText(frame, f"FUEGO", (x, y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        conf = fire.get("confidence", 1.0)
+        in_stove = fire.get("in_stove_zone", False)
+        has_core = fire.get("has_core", False)
+        irregularity = fire.get("irregularity", 0)
+
+        color = (0, 0, 255) if conf >= 0.5 else (0, 165, 255)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+
+        label = f"FUEGO {conf:.0%}"
+        if has_core:
+            label += " *"
+        cv2.putText(frame, label, (x, y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+
+        detail = f"irr:{irregularity:.1f}"
+        if in_stove:
+            detail += " estufa"
+        cv2.putText(frame, detail, (x, y + h + 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
 
     for smoke in detections["smoke"]:
         x, y, w, h = smoke["bbox"]
+        edge = smoke.get("edge_density", 0)
         cv2.rectangle(frame, (x, y), (x + w, y + h), (128, 128, 128), 2)
-        cv2.putText(frame, "HUMO", (x, y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 2)
+        cv2.putText(frame, f"HUMO e:{edge:.2f}", (x, y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 128, 128), 1)
 
     for obj in detections["kitchen_objects"]:
         x1, y1, x2, y2 = obj["bbox"]
@@ -28,25 +45,26 @@ def draw_detections(frame, detections, alerts, status_text, status_color, fps, u
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         label = f"{obj['display_name']} {obj['confidence']:.0%}"
         cv2.putText(frame, label, (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
 
     bar_y = fh - 40
     cv2.rectangle(frame, (0, bar_y), (fw, fh), (0, 0, 0), -1)
     cv2.putText(frame, status_text, (10, bar_y + 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_color, 2)
 
-    info_x = fw - 200
-    cv2.putText(frame, f"FPS: {fps:.1f}", (info_x, bar_y + 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+    cv2.putText(frame, f"FPS: {fps:.1f}", (fw - 130, bar_y + 25),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
 
     persons = detections["persons"]
     cv2.putText(frame, f"Personas: {persons}", (fw - 250, 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 1)
 
     fire_cov = detections.get("fire_coverage", 0)
     smoke_cov = detections.get("smoke_coverage", 0)
-    cv2.putText(frame, f"Fuego: {fire_cov:.1%} | Humo: {smoke_cov:.1%}", (10, 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    n_fire = len(detections.get("fire", []))
+    n_smoke = len(detections.get("smoke", []))
+    info = f"Fuego: {fire_cov:.1%} ({n_fire}reg) | Humo: {smoke_cov:.1%} ({n_smoke}reg)"
+    cv2.putText(frame, info, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
     n_pots = len(detections.get("pots_on_stove", []))
     if n_pots > 0 and persons == 0:
@@ -57,6 +75,6 @@ def draw_detections(frame, detections, alerts, status_text, status_color, fps, u
     if alerts:
         alert = alerts[0]
         cv2.putText(frame, alert["message"], (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
 
     return frame
