@@ -235,7 +235,7 @@ class CameraTab(QWidget):
     def _update_frame(self):
         if not self._running:
             return
-        frame = self.camera.get_frame()
+        frame = self.camera.get_frame() if self.camera else None
         if frame is None:
             return
         self.engine.track_fps()
@@ -402,8 +402,18 @@ class MainWindow(QMainWindow):
         self.setStyleSheet("QMainWindow{background:#111} QWidget{color:#eee;font-family:'Segoe UI',sans-serif}")
 
         # Camera + engine
-        self.camera = CameraHandler()
-        self.engine = CocinaPEngine(self.camera.get_frame)
+        self.camera = None
+        self._camera_ok = False
+        try:
+            self.camera = CameraHandler()
+            self.camera.start()
+            self._camera_ok = True
+        except Exception as e:
+            print(f"[app] Cámara no disponible: {e}")
+
+        self.engine = CocinaPEngine(
+            self.camera.get_frame if self._camera_ok else (lambda: None)
+        )
 
         # Central widget
         central = QWidget()
@@ -427,7 +437,10 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet("QStatusBar{background:#1a1a1a;border-top:1px solid #333;color:#888;font-size:12px}")
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Inicializando...")
+        if not self._camera_ok:
+            self.status_bar.showMessage("⚠ Cámara no disponible - solo configuración")
+        else:
+            self.status_bar.showMessage("Inicializando...")
 
         # Menu
         menu = self.menuBar()
@@ -443,14 +456,15 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(lambda: QMessageBox.about(self, "CocinaP", "Sistema de Seguridad en Cocina v2.0\nDetección de fuego, humo y cocina desatendida"))
         help_menu.addAction(about_action)
 
-        # Start
-        self.camera.start()
+        # Start engine
         self.engine.start()
-        time.sleep(1)
-        self.cam_tab.start()
+        time.sleep(0.5)
+        if self._camera_ok:
+            self.cam_tab.start()
         self.config_tab.load_values()
-        self.engine.webui.push_status({"fire": [], "smoke": [], "persons": 0, "fire_coverage": 0, "smoke_coverage": 0, "pots_on_stove": []}, [], "✅ Sistema listo")
-        self.status_bar.showMessage("✅ Sistema listo")
+        if self.engine.webui:
+            self.engine.webui.push_status({"fire": [], "smoke": [], "persons": 0, "fire_coverage": 0, "smoke_coverage": 0, "pots_on_stove": []}, [], "Sistema listo" if self._camera_ok else "Sin camara")
+        self.status_bar.showMessage("✅ Sistema listo" if self._camera_ok else "⚠ Sin cámara")
 
         # Poll engine status for alarms
         self._status_timer = QTimer(self)
@@ -469,7 +483,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         self.cam_tab.stop()
         self.engine.stop()
-        self.camera.stop()
+        if self.camera:
+            self.camera.stop()
         event.accept()
 
 

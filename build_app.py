@@ -6,43 +6,40 @@ import subprocess
 
 
 def main():
-    model_path = os.path.join(os.path.dirname(__file__), "yolo11n.pt")
-    if not os.path.exists(model_path):
+    base = os.path.dirname(os.path.abspath(__file__))
+    model_rel = os.path.join("models", "yolo11n.pt")
+    model_src = os.path.join(base, model_rel)
+
+    if not os.path.exists(model_src):
         print("Descargando modelo YOLO...")
-        subprocess.check_call([sys.executable, "-c", "from ultralytics import YOLO; YOLO('yolo11n.pt')"])
+        subprocess.check_call(
+            [sys.executable, "-c", "from ultralytics import YOLO; YOLO('yolo11n.pt')"],
+            cwd=base,
+        )
+        os.makedirs(os.path.dirname(model_src), exist_ok=True)
+        shutil.copy(os.path.join(base, "yolo11n.pt"), model_src)
 
     for d in ["build", "dist"]:
-        if os.path.exists(d):
-            shutil.rmtree(d)
+        dpath = os.path.join(base, d)
+        if os.path.exists(dpath):
+            shutil.rmtree(dpath)
 
-    pyinstaller = [sys.executable, "-m", "PyInstaller"]
-
-    args = pyinstaller + [
-        "main.py",
+    args = [
+        sys.executable, "-m", "PyInstaller",
+        os.path.join(base, "main.py"),
         "--name=CocinaP",
-        "--windowed",
-        "--onedir",  # faster build, smaller size
-        "--add-data", f"yolo11n.pt{';'}.",
-        "--hidden-import", "PySide6.QtCore",
-        "--hidden-import", "PySide6.QtGui",
-        "--hidden-import", "PySide6.QtWidgets",
-        "--hidden-import", "PySide6.QtNetwork",
-        "--hidden-import", "cv2",
-        "--hidden-import", "numpy",
-        "--hidden-import", "cocinap.engine",
-        "--hidden-import", "cocinap.detector.detector",
-        "--hidden-import", "cocinap.detector.runner",
-        "--hidden-import", "cocinap.analyzer.risk_analyzer",
-        "--hidden-import", "cocinap.alarm.sound_alarm",
-        "--hidden-import", "cocinap.camera.handler",
-        "--hidden-import", "cocinap.webui",
-        "--hidden-import", "cocinap.config",
+        "--onedir",
+        "--add-data", f"{model_src}{os.pathsep}models",
+        "--collect-submodules", "cocinap",
         "--noconfirm",
-        "--log-level=WARN",
     ]
 
-    print("Ejecutando PyInstaller (esto puede tomar varios minutos)...")
-    sys.exit(subprocess.call(args))
+    print("Compilando con PyInstaller (5-15 min)...")
+    rc = subprocess.call(args)
+    if rc == 0:
+        exe_path = os.path.join(base, "dist", "CocinaP", "CocinaP.exe")
+        print(f"Compilacion exitosa: {exe_path}")
+    sys.exit(rc)
 
 
 if __name__ == "__main__":
