@@ -47,6 +47,10 @@ h1{font-size:20px;margin:8px 0 12px;color:#ff9800;text-align:center}
 .armario-item{text-align:center}
 .armario-val{font-size:32px;font-weight:bold}
 .armario-label{font-size:11px;color:#888}
+.sz-canvas-wrap{background:#000;border-radius:6px;margin:8px 0;position:relative;text-align:center}
+#sz-canvas{width:100%;max-width:480px;cursor:crosshair;border-radius:4px;display:block;margin:0 auto;background:#1a1a2e}
+.sz-coords{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px}
+.sz-coords input{width:100%;padding:4px;border:1px solid #444;border-radius:4px;background:#111;color:#eee;font-size:12px;text-align:center}
 </style>
 </head>
 <body>
@@ -81,6 +85,17 @@ h1{font-size:20px;margin:8px 0 12px;color:#ff9800;text-align:center}
 </div>
 
 <div id="panel-config" class="panel">
+  <div class="cfg-cat">Zona Estufa</div>
+  <div style="font-size:11px;color:#888;margin-bottom:4px">Arrastrá el rectángulo para ajustar la zona de la estufa</div>
+  <div class="sz-canvas-wrap">
+    <canvas id="sz-canvas" width="480" height="270"></canvas>
+  </div>
+  <div class="sz-coords">
+    <div><label style="font-size:11px;color:#888">X (%)</label><input id="sz-x" type="number" min="0" max="90" step="1" value="25"></div>
+    <div><label style="font-size:11px;color:#888">Y (%)</label><input id="sz-y" type="number" min="0" max="90" step="1" value="35"></div>
+    <div><label style="font-size:11px;color:#888">Ancho (%)</label><input id="sz-w" type="number" min="5" max="100" step="1" value="50"></div>
+    <div><label style="font-size:11px;color:#888">Alto (%)</label><input id="sz-h" type="number" min="5" max="100" step="1" value="45"></div>
+  </div>
   <div id="cfg-fields"></div>
   <button class="btn btn-primary btn-save" onclick="saveConfig()">Guardar</button>
   <div id="save-msg"></div>
@@ -117,6 +132,165 @@ const CFG_KEYS = [
 ];
 
 let alarms = [];
+let szState = {x:25, y:35, w:50, h:45, dragging:false, mode:null, startX:0, startY:0, origX:0, origY:0, origW:0, origH:0};
+
+function drawStoveZone() {
+  const c = document.getElementById('sz-canvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // grid background
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#2a2a3e';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 10; i++) {
+    ctx.beginPath(); ctx.moveTo(i*W/10, 0); ctx.lineTo(i*W/10, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i*H/10); ctx.lineTo(W, i*H/10); ctx.stroke();
+  }
+
+  const x = szState.x * W / 100;
+  const y = szState.y * H / 100;
+  const w = szState.w * W / 100;
+  const h = szState.h * H / 100;
+
+  // stove zone fill
+  ctx.fillStyle = 'rgba(76, 175, 80, 0.25)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#4caf50';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+
+  // burners hint
+  ctx.fillStyle = 'rgba(255, 152, 0, 0.15)';
+  [[0.25,0.3],[0.75,0.3],[0.25,0.7],[0.75,0.7]].forEach(p => {
+    const bx = x + p[0] * w, by = y + p[1] * h, br = Math.min(w, h) * 0.12;
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI*2); ctx.fill();
+  });
+
+  // corner handles
+  const hs = 6;
+  const corners = [[x,y],[x+w,y],[x,y+h],[x+w,y+h]];
+  corners.forEach(([cx,cy]) => {
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(cx-hs, cy-hs, hs*2, hs*2);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(cx-hs+2, cy-hs+2, hs*2-4, hs*2-4);
+  });
+
+  // edge handles
+  const mids = [[x+w/2,y],[x+w/2,y+h],[x,y+h/2],[x+w,y+h/2]];
+  ctx.fillStyle = '#81c784';
+  mids.forEach(([mx,my]) => {
+    ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI*2); ctx.fill();
+  });
+
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '11px sans-serif';
+  ctx.fillText(`${szState.w}% × ${szState.h}%`, x+4, y+14);
+}
+
+function hitTestSZ(mx, my) {
+  const c = document.getElementById('sz-canvas');
+  const W = c.width, H = c.height;
+  const x = szState.x * W / 100, y = szState.y * H / 100;
+  const w = szState.w * W / 100, h = szState.h * H / 100;
+  const tol = 10;
+
+  // corners
+  const corners = [
+    {mode:'tl', cx:x, cy:y}, {mode:'tr', cx:x+w, cy:y},
+    {mode:'bl', cx:x, cy:y+h}, {mode:'br', cx:x+w, cy:y+h}
+  ];
+  for (const c of corners) {
+    if (Math.hypot(mx-c.cx, my-c.cy) <= tol) return c.mode;
+  }
+  // edges
+  if (mx >= x && mx <= x+w && Math.abs(my - y) <= tol) return 't';
+  if (mx >= x && mx <= x+w && Math.abs(my - (y+h)) <= tol) return 'b';
+  if (my >= y && my <= y+h && Math.abs(mx - x) <= tol) return 'l';
+  if (my >= y && my <= y+h && Math.abs(mx - (x+w)) <= tol) return 'r';
+  // inside
+  if (mx >= x && mx <= x+w && my >= y && my <= y+h) return 'move';
+  return null;
+}
+
+function szStartDrag(e) {
+  const rect = document.getElementById('sz-canvas').getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * 480 / rect.width;
+  const my = (e.clientY - rect.top) * 270 / rect.height;
+  const mode = hitTestSZ(mx, my);
+  if (!mode) return;
+  szState.dragging = true;
+  szState.mode = mode;
+  szState.startX = mx;
+  szState.startY = my;
+  szState.origX = szState.x;
+  szState.origY = szState.y;
+  szState.origW = szState.w;
+  szState.origH = szState.h;
+}
+
+function szDrag(e) {
+  if (!szState.dragging) return;
+  e.preventDefault();
+  const rect = document.getElementById('sz-canvas').getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * 480 / rect.width;
+  const my = (e.clientY - rect.top) * 270 / rect.height;
+  const dx = (mx - szState.startX) * 100 / 480;
+  const dy = (my - szState.startY) * 100 / 270;
+
+  let nx = szState.origX, ny = szState.origY, nw = szState.origW, nh = szState.origH;
+  const m = szState.mode;
+
+  if (m === 'move') { nx = clamp(szState.origX + dx, 0, 100-szState.origW); ny = clamp(szState.origY + dy, 0, 100-szState.origH); }
+  else if (m === 'e' || m === 'tr' || m === 'br' || m === 'r') { nw = clamp(szState.origW + dx, 5, 100-szState.origX); }
+  else if (m === 'w' || m === 'tl' || m === 'bl' || m === 'l') { const dw = Math.min(dx, szState.origW - 5); nx = szState.origX + dw; nw = szState.origW - dw; }
+  else if (m === 's' || m === 'b') { nh = clamp(szState.origH + dy, 5, 100-szState.origY); }
+  else if (m === 'n' || m === 't') { const dh = Math.min(dy, szState.origH - 5); ny = szState.origY + dh; nh = szState.origH - dh; }
+
+  szState.x = Math.round(clamp(nx, 0, 90));
+  szState.y = Math.round(clamp(ny, 0, 90));
+  szState.w = Math.round(clamp(nw, 5, 100 - szState.x));
+  szState.h = Math.round(clamp(nh, 5, 100 - szState.y));
+  syncSZInputs();
+  drawStoveZone();
+}
+
+function szEndDrag() { szState.dragging = false; }
+
+function syncSZInputs() {
+  document.getElementById('sz-x').value = szState.x;
+  document.getElementById('sz-y').value = szState.y;
+  document.getElementById('sz-w').value = szState.w;
+  document.getElementById('sz-h').value = szState.h;
+}
+
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+
+function setupSZCanvas() {
+  const c = document.getElementById('sz-canvas');
+  if (!c) return;
+  c.addEventListener('mousedown', szStartDrag);
+  c.addEventListener('mousemove', szDrag);
+  c.addEventListener('mouseup', szEndDrag);
+  c.addEventListener('mouseleave', szEndDrag);
+  c.addEventListener('touchstart', e => { const t = e.touches[0]; szStartDrag({clientX:t.clientX, clientY:t.clientY, preventDefault:()=>e.preventDefault()}); }, {passive:false});
+  c.addEventListener('touchmove', e => { const t = e.touches[0]; szDrag({clientX:t.clientX, clientY:t.clientY, preventDefault:()=>e.preventDefault()}); }, {passive:false});
+  c.addEventListener('touchend', szEndDrag);
+
+  ['sz-x','sz-y','sz-w','sz-h'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      szState.x = parseFloat(document.getElementById('sz-x').value) || 0;
+      szState.y = parseFloat(document.getElementById('sz-y').value) || 0;
+      szState.w = parseFloat(document.getElementById('sz-w').value) || 5;
+      szState.h = parseFloat(document.getElementById('sz-h').value) || 5;
+      drawStoveZone();
+    });
+  });
+}
 
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -174,6 +348,13 @@ function clearAlarms() {
 async function loadConfig() {
   const cfg = await fetchJSON('/api/config');
   if (!cfg) return;
+  // restore stove zone
+  if (cfg.STOVE_ZONE_X != null) { szState.x = Math.round(cfg.STOVE_ZONE_X * 100); }
+  if (cfg.STOVE_ZONE_Y != null) { szState.y = Math.round(cfg.STOVE_ZONE_Y * 100); }
+  if (cfg.STOVE_ZONE_W != null) { szState.w = Math.round(cfg.STOVE_ZONE_W * 100); }
+  if (cfg.STOVE_ZONE_H != null) { szState.h = Math.round(cfg.STOVE_ZONE_H * 100); }
+  syncSZInputs();
+  drawStoveZone();
   const container = document.getElementById('cfg-fields');
   let html = '';
   let lastCat = '';
@@ -206,6 +387,11 @@ async function saveConfig() {
     const raw = inp.value;
     updates[key] = raw.includes('.') ? parseFloat(raw) : parseInt(raw);
   });
+  // stove zone
+  updates.STOVE_ZONE_X = parseFloat((document.getElementById('sz-x').value || 25)) / 100;
+  updates.STOVE_ZONE_Y = parseFloat((document.getElementById('sz-y').value || 35)) / 100;
+  updates.STOVE_ZONE_W = parseFloat((document.getElementById('sz-w').value || 50)) / 100;
+  updates.STOVE_ZONE_H = parseFloat((document.getElementById('sz-h').value || 45)) / 100;
   const r = await fetch('/api/config', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -219,6 +405,7 @@ async function saveConfig() {
 
 setInterval(updateStatus, 1000);
 updateStatus();
+setupSZCanvas();
 </script>
 </body>
 </html>"""
@@ -320,6 +507,7 @@ class WebUI:
 
     def get_config(self):
         import cocinap.config as cfg
+        sz = cfg.STOVE_ZONE
         keys = [
             "YOLO_CONFIDENCE", "DETECTION_INTERVAL", "DETECT_SCALE",
             "FIRE_COVERAGE_LOW", "FIRE_COVERAGE_MEDIUM", "FIRE_COVERAGE_HIGH",
@@ -330,11 +518,26 @@ class WebUI:
             "SMOKE_AREA_MIN", "SMOKE_STOVE_ZONE_ONLY",
             "PERSON_HYSTERESIS_SECONDS", "RISK_COOLDOWN",
         ]
-        return {k: getattr(cfg, k, None) for k in keys}
+        result = {k: getattr(cfg, k, None) for k in keys}
+        result["STOVE_ZONE_X"] = sz["x"]
+        result["STOVE_ZONE_Y"] = sz["y"]
+        result["STOVE_ZONE_W"] = sz["w"]
+        result["STOVE_ZONE_H"] = sz["h"]
+        return result
 
     def update_config(self, updates):
         import cocinap.config as cfg
         try:
+            # build stove zone from individual keys
+            sz_keys = ["STOVE_ZONE_X", "STOVE_ZONE_Y", "STOVE_ZONE_W", "STOVE_ZONE_H"]
+            sz_vals = {}
+            for k in sz_keys:
+                if k in updates:
+                    sz_vals[k.split("_")[-1].lower()] = float(updates[k])
+                    del updates[k]
+            if len(sz_vals) == 4:
+                cfg.STOVE_ZONE.update(sz_vals)
+
             for k, v in updates.items():
                 if hasattr(cfg, k):
                     current = getattr(cfg, k)
