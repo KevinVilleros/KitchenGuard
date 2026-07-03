@@ -25,3 +25,8 @@ logs/*.log
 # OS
 Thumbs.db
 .DS_Store
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
