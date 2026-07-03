@@ -38,6 +38,17 @@ class SoundAlarm:
                 pass
             time.sleep(2.0)
 
+    def _beep_smoke(self):
+        while self._alarm_active:
+            for freq in [1200, 900, 1200]:
+                if not self._alarm_active:
+                    break
+                try:
+                    winsound.Beep(freq, 150)
+                except Exception:
+                    pass
+                time.sleep(0.3)
+
     def start_fire(self):
         if self.playing:
             return
@@ -45,6 +56,15 @@ class SoundAlarm:
         self.playing = True
         self._alarm_type = "fire"
         self.thread = threading.Thread(target=self._beep_fire, daemon=True)
+        self.thread.start()
+
+    def start_smoke(self):
+        if self.playing:
+            return
+        self._alarm_active = True
+        self.playing = True
+        self._alarm_type = "smoke"
+        self.thread = threading.Thread(target=self._beep_smoke, daemon=True)
         self.thread.start()
 
     def start_unattended(self):

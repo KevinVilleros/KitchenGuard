@@ -3,23 +3,29 @@ from cocinap.detector.runner import DetectionRunner
 from cocinap.analyzer.risk_analyzer import RiskAnalyzer
 from cocinap.alarm.sound_alarm import SoundAlarm
 from cocinap.utils.visuals import draw_detections
+from cocinap.webui import WebUI
 
 
 class CocinaPEngine:
-    def __init__(self, get_frame_cb=None):
+    def __init__(self, get_frame_cb=None, web_port=None):
         self.runner = DetectionRunner(get_frame_cb)
         self.analyzer = RiskAnalyzer()
         self.alarm = SoundAlarm()
+        self.webui = WebUI(port=web_port or 8080) if web_port is not None else None
         self.fps = 0
         self._frame_count = 0
         self._fps_timer = time.time()
 
     def start(self):
         self.runner.start()
+        if self.webui:
+            self.webui.start()
 
     def stop(self):
         self.runner.stop()
         self.alarm.stop()
+        if self.webui:
+            self.webui.stop()
 
     def submit_frame(self, frame):
         self.runner.submit_frame(frame)
@@ -33,10 +39,17 @@ class CocinaPEngine:
         if trigger:
             if alarm_type == "fire":
                 self.alarm.start_fire()
+            elif alarm_type == "smoke":
+                self.alarm.start_smoke()
             elif alarm_type == "unattended":
                 self.alarm.start_unattended()
         elif not alerts:
             self.alarm.stop()
+
+        if self.webui:
+            status_text, _ = self.get_status(alerts, dets)
+            self.webui.push_status(dets, alerts, status_text)
+
         return alerts, trigger, alarm_type
 
     def get_unattended(self, dets):

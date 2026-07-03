@@ -1,8 +1,9 @@
 import time
 import os
 from cocinap.config import (
-    FIRE_COVERAGE_LOW, FIRE_COVERAGE_MEDIUM, FIRE_COVERAGE_HIGH,
-    FIRE_HISTORY_FRAMES, SMOKE_HISTORY_FRAMES, SMOKE_COVERAGE_MIN,
+    FIRE_COVERAGE_LOW, FIRE_COVERAGE_MEDIUM, FIRE_COVERAGE_HIGH, FIRE_COVERAGE_CRITICAL,
+    FIRE_AREA_LARGE, FIRE_SUSTAINED_SECONDS,
+    FIRE_HISTORY_FRAMES, SMOKE_HISTORY_FRAMES, SMOKE_COVERAGE_MIN, SMOKE_COVERAGE_HIGH,
     PERSON_HYSTERESIS_SECONDS,
     UNATTENDED_WARN_MINUTES, UNATTENDED_WARN_HIGH_MINUTES, UNATTENDED_ALARM_MINUTES,
     RISK_COOLDOWN, EVENT_LOG_FILE,
@@ -17,6 +18,8 @@ class RiskAnalyzer:
 
         self.fire_history = []
         self.smoke_history = []
+        self._fire_sustained_count = 0
+        self._fire_sustained_start = 0.0
 
         self.last_alert_time = 0
         self._log_path = EVENT_LOG_FILE
@@ -31,6 +34,8 @@ class RiskAnalyzer:
             pass
 
     def _get_fire_level(self, coverage):
+        if coverage >= FIRE_COVERAGE_CRITICAL:
+            return "CRÍTICO"
         if coverage >= FIRE_COVERAGE_HIGH:
             return "ALTO"
         if coverage >= FIRE_COVERAGE_MEDIUM:
@@ -47,6 +52,11 @@ class RiskAnalyzer:
 
     def _max_fire_area(self, detections):
         return max((r["area"] for r in detections.get("fire", [])), default=0)
+
+    def _fire_large_present(self, detections):
+        fire_cov = detections["fire_coverage"]
+        max_area = self._max_fire_area(detections)
+        return fire_cov >= FIRE_COVERAGE_MEDIUM or max_area >= FIRE_AREA_LARGE
 
     def analyze(self, detections):
         current_time = time.time()
@@ -84,39 +94,63 @@ class RiskAnalyzer:
 
         fire_stable = sum(self.fire_history) >= FIRE_HISTORY_FRAMES // 2
 
-        if fire_stable and valid_fire_now:
-            level = self._get_fire_level(fire_cov)
-            fire_has_low_conf = any(
-                r["confidence"] < 0.4 for r in fire_regions
-            )
+        # ---- Condition 1: Fire on stove with NO person ----
+        if fire_in_stove and not has_person and valid_fire_now:
+            level = self._get_fire_level(fire_cov) or "BAJO"
+            severity = level if level else "BAJO"
+            alerts.append({
+                "type": "FUEGO_DESATENDIDO",
+                "severity": severity,
+                "message": (
+                    f"🔥 Fuego en estufa sin supervisión"
+                    f" ({fire_cov:.1%}, conf:{max_conf:.0%})"
+                ),
+                "confidence": max_conf,
+                "coverage": fire_cov,
+                "in_stove": True,
+            })
 
-            if level or fire_cov >= FIRE_COVERAGE_LOW:
-                if level is None:
-                    level = "BAJO"
+        # ---- Condition 2: Large fire sustained >7 seconds ----
+        is_large = self._fire_large_present(detections) and valid_fire_now
+        if is_large:
+            if self._fire_sustained_count == 0:
+                self._fire_sustained_start = current_time
+            self._fire_sustained_count += 1
+            sustained = current_time - self._fire_sustained_start
+            if sustained >= FIRE_SUSTAINED_SECONDS:
+                level = self._get_fire_level(fire_cov) or "ALTO"
+                alerts.append({
+                    "type": "FUEGO_SOSTENIDO",
+                    "severity": "CRÍTICO" if level == "CRÍTICO" else "ALTO",
+                    "message": (
+                        f"🔥 FUEGO INTENSO {sustained:.0f}s"
+                        f" ({fire_cov:.1%}, área:{max_fire_area})"
+                    ),
+                    "confidence": min(max_conf + 0.1, 0.95),
+                    "coverage": fire_cov,
+                    "in_stove": fire_in_stove,
+                })
+        else:
+            self._fire_sustained_count = 0
+            self._fire_sustained_start = 0.0
 
-                label_map = {"BAJO": "bajo", "MEDIO": "medio", "ALTO": "grande"}
-                stove_tag = " (estufa)" if fire_in_stove else " fuera"
+        # ---- Traditional fire alerts (stable fire in stove or outside) ----
+        if fire_stable and valid_fire_now and not fire_in_stove:
+            level = self._get_fire_level(fire_cov) or "BAJO"
+            alerts.append({
+                "type": "FUEGO",
+                "severity": level,
+                "message": (
+                    f"🔥 Fuego fuera de la estufa"
+                    f" ({fire_cov:.1%}, conf:{max_conf:.0%})"
+                ),
+                "confidence": max_conf,
+                "coverage": fire_cov,
+                "in_stove": False,
+            })
 
-                adjusted_level = level
-                if not fire_in_stove and level in ("BAJO", "MEDIO"):
-                    adjusted_level = "ALTO"
-
-                skip_fire = fire_in_stove and has_person and level == "BAJO"
-
-                if not skip_fire:
-                    alerts.append({
-                        "type": "FUEGO",
-                        "severity": adjusted_level,
-                        "message": (
-                            f"🔥 Fuego {label_map[level]}{stove_tag}"
-                            f" ({fire_cov:.1%}, conf:{max_conf:.0%})"
-                        ),
-                        "confidence": max_conf,
-                        "coverage": fire_cov,
-                        "in_stove": fire_in_stove,
-                    })
-
-        cooking_steam = has_person and (n_pots > 0 or (smoke_cov > 0 and not fire_valid))
+        # ---- Condition 3: Abundant smoke ----
+        cooking_steam = has_person and (n_pots > 0 or (smoke_cov > 0 and not valid_fire_now))
         is_real_smoke = smoke_cov >= SMOKE_COVERAGE_MIN and not cooking_steam
 
         self.smoke_history.append(is_real_smoke)
@@ -125,22 +159,32 @@ class RiskAnalyzer:
         smoke_stable = sum(self.smoke_history) >= SMOKE_HISTORY_FRAMES // 2
 
         if smoke_stable and is_real_smoke:
-            has_fire_nearby = fire_stable and valid_fire_now
-            if has_fire_nearby:
+            if smoke_cov >= SMOKE_COVERAGE_HIGH:
                 alerts.append({
-                    "type": "HUMO", "severity": "ALTO",
-                    "message": f"💨 Humo + fuego ({smoke_cov:.1%})",
+                    "type": "HUMO_ABUNDANTE",
+                    "severity": "CRÍTICO",
+                    "message": f"💨 Humo abundante ({smoke_cov:.1%})",
                     "confidence": min(smoke_cov / 0.1, 0.9),
                     "coverage": smoke_cov,
                 })
             else:
-                alerts.append({
-                    "type": "HUMO", "severity": "ALTO",
-                    "message": f"💨 Humo en cocina ({smoke_cov:.1%})",
-                    "confidence": min(smoke_cov / 0.1, 0.7),
-                    "coverage": smoke_cov,
-                })
+                has_fire_nearby = fire_stable and valid_fire_now
+                if has_fire_nearby:
+                    alerts.append({
+                        "type": "HUMO", "severity": "ALTO",
+                        "message": f"💨 Humo + fuego ({smoke_cov:.1%})",
+                        "confidence": min(smoke_cov / 0.1, 0.9),
+                        "coverage": smoke_cov,
+                    })
+                else:
+                    alerts.append({
+                        "type": "HUMO", "severity": "MEDIO",
+                        "message": f"💨 Humo en cocina ({smoke_cov:.1%})",
+                        "confidence": min(smoke_cov / 0.1, 0.7),
+                        "coverage": smoke_cov,
+                    })
 
+        # ---- Unattended pots (existing logic) ----
         if n_pots > 0 and not has_person:
             person_has_left = self.consecutive_no_person >= PERSON_HYSTERESIS_SECONDS
             if person_has_left:
@@ -174,23 +218,48 @@ class RiskAnalyzer:
         if current_time - self.last_alert_time < RISK_COOLDOWN:
             return False, None
 
+        # CRÍTICO severity → fire alarm (includes HUMO_ABUNDANTE, FUEGO_SOSTENIDO CRÍTICO)
         for a in alerts:
             if a["severity"] == "CRÍTICO":
                 self.last_alert_time = current_time
                 self._log_event(f"ALARMA {a['type']} - {a['message']}")
+                alarm_type = "smoke" if a["type"] in ("HUMO_ABUNDANTE", "HUMO") else "fire"
+                return True, alarm_type
+
+        # FUEGO_DESATENDIDO → fire alarm (stove unattended)
+        for a in alerts:
+            if a["type"] == "FUEGO_DESATENDIDO":
+                self.last_alert_time = current_time
+                self._log_event(f"ALARMA {a['type']} - {a['message']}")
                 return True, "fire"
 
+        # FUEGO_SOSTENIDO → fire alarm
+        for a in alerts:
+            if a["type"] == "FUEGO_SOSTENIDO":
+                self.last_alert_time = current_time
+                self._log_event(f"ALARMA {a['type']} - {a['message']}")
+                return True, "fire"
+
+        # Unattended critical/alto
         for a in alerts:
             if a["type"] in ("OLVIDO_CRITICO", "OLVIDO_ALTO"):
                 self.last_alert_time = current_time
                 self._log_event(f"ALARMA {a['type']} - {a['message']}")
                 return True, "unattended"
 
+        # Fire outside stove at ALTO
         for a in alerts:
-            if a["severity"] == "ALTO" and not a.get("in_stove", True):
+            if a["type"] == "FUEGO" and a["severity"] == "ALTO":
                 self.last_alert_time = current_time
                 self._log_event(f"ALERTA {a['type']} - {a['message']}")
                 return True, "fire"
+
+        # HUMO abundant or HUMO + FUEGO at ALTO
+        for a in alerts:
+            if a["type"] in ("HUMO",) and a["severity"] == "ALTO":
+                self.last_alert_time = current_time
+                self._log_event(f"ALERTA {a['type']} - {a['message']}")
+                return True, "smoke"
 
         return False, None
 

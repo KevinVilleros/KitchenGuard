@@ -32,7 +32,7 @@ def _pick_file():
     return path if os.path.exists(path) else None
 
 
-def run_test(video_path=None, headless=False):
+def run_test(video_path=None, headless=False, web_port=None):
     if video_path is None:
         video_path = _pick_file()
     if not video_path or not os.path.exists(video_path):
@@ -57,7 +57,7 @@ def run_test(video_path=None, headless=False):
         print("Controles: [Q] salir  [Espacio] pausa")
     print("Procesando...\n")
 
-    engine = CocinaPEngine()
+    engine = CocinaPEngine(web_port=web_port)
     engine.start()
     time.sleep(1)
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """CocinaP - Sistema de Seguridad en Cocina
 Uso:
-  python main.py            Cámara en vivo
-  python main.py test       Probar con video (selector de archivos)
+  python main.py                     Cámara en vivo
+  python main.py test [video]        Probar con video (selector si sin ruta)
+  python main.py --web [puerto]      Interfaz web en puerto (defecto: 8080)
+  python main.py test --web          Test + interfaz web
 """
 import sys
 import os
@@ -10,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
-def cmd_camera():
+def cmd_camera(web_port=None):
     from cocinap.camera.handler import CameraHandler
     from cocinap.engine import CocinaPEngine
     import cv2
@@ -20,7 +22,7 @@ def cmd_camera():
     print("Inicializando...")
 
     camera = CameraHandler()
-    engine = CocinaPEngine(camera.get_frame)
+    engine = CocinaPEngine(camera.get_frame, web_port=web_port)
 
     print("Conectando cámara...")
     camera.start()
@@ -63,11 +65,18 @@ def cmd_camera():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
+    web_port = None
+    args = sys.argv[1:]
+    if "--web" in args:
+        idx = args.index("--web")
+        web_port = int(args[idx + 1]) if idx + 1 < len(args) and args[idx + 1].isdigit() else 8080
+        args = [a for a in args if a not in ("--web", str(web_port))]
+
+    if args and args[0] == "test":
         from cocinap.test_app import run_test
-        video = sys.argv[2] if len(sys.argv) > 2 else None
-        run_test(video)
-    elif len(sys.argv) > 1:
+        video = args[1] if len(args) > 1 else None
+        run_test(video, web_port=web_port)
+    elif args:
         print(__doc__)
     else:
-        cmd_camera()
+        cmd_camera(web_port=web_port)
