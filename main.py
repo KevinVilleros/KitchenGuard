@@ -65,6 +65,12 @@ def cmd_camera(web_port=None):
 
 
 if __name__ == "__main__":
+    # Default to GUI when running as bundled EXE (no console)
+    if getattr(sys, 'frozen', False) and len(sys.argv) <= 1:
+        from cocinap.app import main
+        main()
+        sys.exit(0)
+
     web_port = None
     args = sys.argv[1:]
     if "--web" in args:
@@ -76,6 +82,9 @@ if __name__ == "__main__":
         from cocinap.test_app import run_test
         video = args[1] if len(args) > 1 else None
         run_test(video, web_port=web_port)
+    elif args and args[0] == "gui":
+        from cocinap.app import main
+        main()
     elif args:
         print(__doc__)
     else:
