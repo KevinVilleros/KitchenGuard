@@ -24,6 +24,7 @@ class DetectionRunner:
         self.latest = dict(_EMPTY_DETECTIONS)
         self._submitted_frame = None
         self._has_new_frame = False
+        self._last_frame = None
 
     def start(self):
         self._running = True
@@ -50,12 +51,21 @@ class DetectionRunner:
                 return self._submitted_frame
         return None
 
+    @property
+    def last_frame(self):
+        with self._lock:
+            if self._last_frame is not None:
+                return self._last_frame.copy()
+            return None
+
     def _loop(self):
         while self._running:
             frame = self._get_frame()
             if frame is None:
                 time.sleep(0.005)
                 continue
+            with self._lock:
+                self._last_frame = frame.copy()
             result = self.detector.detect(frame)
             dets = self.detector.get_detection_summary(result, frame)
             with self._lock:

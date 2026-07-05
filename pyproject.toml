@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "cocinap"
-version = "0.1.0"
+version = "1.0.1"
 description = "Sistema de Seguridad en Cocina con YOLO11 + OpenCV"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,8 +12,9 @@ dependencies = [
     "ultralytics>=8.3.0",
     "torch>=2.5.0",
     "numpy>=1.26.0",
-    "Pillow>=11.0.0",
-    "gradio>=6.0.0",
+    "PySide6>=6.7.0",
+    "zeroconf>=0.131.0",
+    "firebase-admin>=6.5.0",
 ]
 
 [tool.setuptools.packages.find]

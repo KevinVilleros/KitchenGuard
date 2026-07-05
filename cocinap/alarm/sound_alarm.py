@@ -1,6 +1,8 @@
 import threading
 import time
-import winsound
+import ctypes
+
+kernel32 = ctypes.windll.kernel32
 
 
 class SoundAlarm:
@@ -9,80 +11,62 @@ class SoundAlarm:
         self.thread = None
         self._alarm_active = False
         self._alarm_type = None
+        self._lock = threading.Lock()
 
-    def _beep_fire(self):
+    def _beep_async(self, freq, duration):
+        kernel32.Beep(ctypes.c_int(freq), ctypes.c_int(duration))
+
+    def _stop_beep(self):
+        kernel32.Beep(ctypes.c_int(0), ctypes.c_int(0))
+
+    def _beep_pattern(self, pattern):
         while self._alarm_active:
-            for freq in [880, 660, 880, 660]:
+            for freq, dur, slp in pattern:
                 if not self._alarm_active:
-                    break
+                    return
                 try:
-                    winsound.Beep(freq, 200)
+                    self._beep_async(freq, dur)
                 except Exception:
                     pass
-                time.sleep(0.05)
-
-    def _beep_unattended(self):
-        while self._alarm_active:
-            if not self._alarm_active:
-                break
-            try:
-                winsound.Beep(660, 400)
-            except Exception:
-                pass
-            time.sleep(0.8)
-            if not self._alarm_active:
-                break
-            try:
-                winsound.Beep(660, 400)
-            except Exception:
-                pass
-            time.sleep(2.0)
-
-    def _beep_smoke(self):
-        while self._alarm_active:
-            for freq in [1200, 900, 1200]:
-                if not self._alarm_active:
-                    break
-                try:
-                    winsound.Beep(freq, 150)
-                except Exception:
-                    pass
-                time.sleep(0.3)
+                if slp > 0:
+                    time.sleep(slp)
 
     def start_fire(self):
-        if self.playing:
-            return
-        self._alarm_active = True
-        self.playing = True
-        self._alarm_type = "fire"
-        self.thread = threading.Thread(target=self._beep_fire, daemon=True)
-        self.thread.start()
+        with self._lock:
+            if self.playing:
+                return
+            self._alarm_active = True
+            self.playing = True
+            self._alarm_type = "fire"
+            pattern = [(880, 200, 0.05), (660, 200, 0.05), (880, 200, 0.05), (660, 200, 0.05)]
+            self.thread = threading.Thread(target=self._beep_pattern, args=(pattern,), daemon=True)
+            self.thread.start()
 
     def start_smoke(self):
-        if self.playing:
-            return
-        self._alarm_active = True
-        self.playing = True
-        self._alarm_type = "smoke"
-        self.thread = threading.Thread(target=self._beep_smoke, daemon=True)
-        self.thread.start()
+        with self._lock:
+            if self.playing:
+                return
+            self._alarm_active = True
+            self.playing = True
+            self._alarm_type = "smoke"
+            pattern = [(1200, 150, 0.3), (900, 150, 0.3), (1200, 150, 0.3)]
+            self.thread = threading.Thread(target=self._beep_pattern, args=(pattern,), daemon=True)
+            self.thread.start()
 
     def start_unattended(self):
-        if self.playing:
-            return
-        self._alarm_active = True
-        self.playing = True
-        self._alarm_type = "unattended"
-        self.thread = threading.Thread(target=self._beep_unattended, daemon=True)
-        self.thread.start()
+        with self._lock:
+            if self.playing:
+                return
+            self._alarm_active = True
+            self.playing = True
+            self._alarm_type = "unattended"
+            pattern = [(660, 200, 0.80), (660, 200, 0.80), (660, 200, 2.0)]
+            self.thread = threading.Thread(target=self._beep_pattern, args=(pattern,), daemon=True)
+            self.thread.start()
 
     def stop(self):
-        self._alarm_active = False
-        self.playing = False
-        self._alarm_type = None
-
-    def beep_once(self, freq=880, duration=500):
-        try:
-            winsound.Beep(freq, duration)
-        except Exception:
-            pass
+        with self._lock:
+            self._alarm_active = False
+            self.playing = False
+            self._alarm_type = None
+        self._stop_beep()

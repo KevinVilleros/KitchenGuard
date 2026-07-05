@@ -11,7 +11,10 @@ class CocinaPEngine:
         self.runner = DetectionRunner(get_frame_cb)
         self.analyzer = RiskAnalyzer()
         self.alarm = SoundAlarm()
-        self.webui = WebUI(port=web_port or 8080) if web_port is not None else None
+        self.webui = WebUI(
+            port=web_port or 8080,
+            get_frame_cb=(lambda: self.runner.last_frame) if get_frame_cb else None,
+        ) if web_port is not None else None
         self.fps = 0
         self._frame_count = 0
         self._fps_timer = time.time()
@@ -43,6 +46,8 @@ class CocinaPEngine:
                 self.alarm.start_smoke()
             elif alarm_type == "unattended":
                 self.alarm.start_unattended()
+            if self.webui:
+                self.webui.send_fcm(alerts)
         elif not alerts:
             self.alarm.stop()
 

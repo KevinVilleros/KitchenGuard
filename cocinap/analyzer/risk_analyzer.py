@@ -1,5 +1,4 @@
 import time
-import os
 from cocinap.config import (
     FIRE_COVERAGE_LOW, FIRE_COVERAGE_MEDIUM, FIRE_COVERAGE_HIGH, FIRE_COVERAGE_CRITICAL,
     FIRE_AREA_LARGE, FIRE_SUSTAINED_SECONDS,
@@ -96,8 +95,7 @@ class RiskAnalyzer:
 
         # ---- Condition 1: Fire on stove with NO person ----
         if fire_in_stove and not has_person and valid_fire_now:
-            level = self._get_fire_level(fire_cov) or "BAJO"
-            severity = level if level else "BAJO"
+            severity = self._get_fire_level(fire_cov) or "BAJO"
             alerts.append({
                 "type": "FUEGO_DESATENDIDO",
                 "severity": severity,

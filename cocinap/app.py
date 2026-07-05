@@ -3,18 +3,20 @@ import sys
 import os
 import math
 import time
+import traceback
+from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF, Signal, Slot
 from PySide6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QPen, QBrush,
-    QFont, QCursor, QAction, QCloseEvent,
+    QFont, QCursor, QAction, QCloseEvent, QIcon,
 )
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTabWidget, QLabel, QPushButton, QScrollArea, QGridLayout,
+    QTabWidget, QLabel, QPushButton, QScrollArea,
     QGroupBox, QDoubleSpinBox, QSpinBox, QCheckBox, QListWidget,
     QListWidgetItem, QMessageBox, QStatusBar, QFrame, QSizePolicy,
-    QFormLayout,
+    QFormLayout, QComboBox, QSystemTrayIcon, QMenu, QSplashScreen,
 )
 
 import numpy as np
@@ -29,30 +31,25 @@ from cocinap.camera.handler import CameraHandler
 import cocinap.config as cfg
 
 
-# ── Configuration field definitions ──
-CFG_KEYS = [
-    ("YOLO_CONFIDENCE", "Confianza YOLO", "float", 0.1, 0.9, 0.05),
-    ("DETECTION_INTERVAL", "Intervalo detección (s)", "float", 0.05, 1.0, 0.05),
-    ("DETECT_SCALE", "Escala detección", "float", 0.1, 0.5, 0.05),
-    ("FIRE_COVERAGE_LOW", "Cobertura fuego BAJA", "float", 0.01, 0.5, 0.01),
-    ("FIRE_COVERAGE_MEDIUM", "Cobertura fuego MEDIA", "float", 0.02, 0.6, 0.01),
-    ("FIRE_COVERAGE_HIGH", "Cobertura fuego ALTA", "float", 0.05, 0.8, 0.01),
-    ("FIRE_COVERAGE_CRITICAL", "Cobertura fuego CRÍTICA", "float", 0.1, 0.9, 0.01),
-    ("FIRE_AREA_LARGE", "Área fuego grande (px)", "int", 1000, 50000, 500),
-    ("FIRE_SUSTAINED_SECONDS", "Segundos fuego sostenido", "int", 2, 30, 1),
-    ("FIRE_CONFIDENCE_THRESHOLD", "Umbral confianza fuego", "float", 0.2, 0.9, 0.05),
-    ("SMOKE_COVERAGE_MIN", "Cobertura humo mínima", "float", 0.0001, 0.05, 0.0005),
-    ("SMOKE_COVERAGE_HIGH", "Cobertura humo ALTA", "float", 0.02, 0.5, 0.01),
-    ("SMOKE_CONFIDENCE_THRESHOLD", "Umbral confianza humo", "float", 0.2, 0.9, 0.05),
-    ("SMOKE_EDGE_MAX", "Máx bordes humo", "float", 0.1, 0.6, 0.05),
-    ("SMOKE_TEXTURE_MIN", "Textura humo mín", "float", 0.5, 5.0, 0.5),
-    ("SMOKE_TEXTURE_MAX", "Textura humo máx", "float", 10, 50, 5),
-    ("PERSON_HYSTERESIS_SECONDS", "Histéresis persona (s)", "int", 1, 30, 1),
-    ("RISK_COOLDOWN", "Cooldown alertas (s)", "int", 1, 30, 1),
-]
+def _global_excepthook(exc_type, exc_value, exc_tb):
+    msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    crash_log = os.path.join(cfg._APP_DATA, "logs", "crash.log")
+    try:
+        with open(crash_log, "a") as f:
+            f.write(f"\n=== {datetime.now()} ===\n{msg}\n")
+    except Exception:
+        pass
+    box = QMessageBox()
+    box.setIcon(QMessageBox.Critical)
+    box.setWindowTitle("CocinaP - Error")
+    box.setText("Ocurrio un error inesperado")
+    box.setDetailedText(msg)
+    box.exec()
 
 
-# ── Stove Zone Editor Widget ──
+sys.excepthook = _global_excepthook
+
+
 class StoveZoneWidget(QWidget):
     changed = Signal(float, float, float, float)
 
@@ -188,7 +185,6 @@ class StoveZoneWidget(QWidget):
         self._drag_orig = None
 
 
-# ── Camera Tab ──
 class CameraTab(QWidget):
     def __init__(self, engine, camera, parent=None):
         super().__init__(parent)
@@ -210,10 +206,10 @@ class CameraTab(QWidget):
         s_layout = QHBoxLayout(status_bar)
         s_layout.setContentsMargins(8, 4, 8, 4)
 
-        self.fire_label = QLabel("🔥 Fuego: 0")
-        self.smoke_label = QLabel("💨 Humo: 0")
-        self.person_label = QLabel("👤 Personas: 0")
-        self.status_label = QLabel("✅ Iniciando...")
+        self.fire_label = QLabel("Fuego: 0")
+        self.smoke_label = QLabel("Humo: 0")
+        self.person_label = QLabel("Personas: 0")
+        self.status_label = QLabel("Iniciando...")
         self.fps_label = QLabel("0 FPS")
         for lbl in [self.fire_label, self.smoke_label, self.person_label, self.status_label, self.fps_label]:
             lbl.setStyleSheet("color:#ccc;font-size:12px;padding:2px 8px")
@@ -235,41 +231,42 @@ class CameraTab(QWidget):
     def _update_frame(self):
         if not self._running:
             return
-        frame = self.camera.get_frame() if self.camera else None
-        if frame is None:
-            return
-        self.engine.track_fps()
-        dets = self.engine.get_latest()
-        alerts, _, _ = self.engine.analyze(dets)
-        unattended = self.engine.get_unattended(dets)
-        status_text, status_color = self.engine.get_status(alerts, dets)
-        display = self.engine.draw(frame, dets, alerts, status_text, status_color, self.engine.fps, unattended)
+        try:
+            frame = self.camera.get_frame() if self.camera else None
+            if frame is None:
+                return
+            self.engine.track_fps()
+            dets = self.engine.get_latest()
+            alerts, _, _ = self.engine.analyze(dets)
+            unattended = self.engine.get_unattended(dets)
+            status_text, status_color = self.engine.get_status(alerts, dets)
+            display = self.engine.draw(frame, dets, alerts, status_text, status_color, self.engine.fps, unattended)
 
-        rgb = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb.shape
-        img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
-        pix = QPixmap.fromImage(img)
-        scaled = pix.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.video_label.setPixmap(scaled)
+            rgb = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb.shape
+            img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
+            pix = QPixmap.fromImage(img)
+            scaled = pix.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.video_label.setPixmap(scaled)
 
-        self.fire_label.setText(f"🔥 Fuego: {len(dets.get('fire', []))}")
-        self.smoke_label.setText(f"💨 Humo: {len(dets.get('smoke', []))}")
-        self.person_label.setText(f"👤 Personas: {dets.get('persons', 0)}")
-        self.status_label.setText(status_text)
-        self.fps_label.setText(f"{self.engine.fps:.0f} FPS")
+            self.fire_label.setText(f"Fuego: {len(dets.get('fire', []))}")
+            self.smoke_label.setText(f"Humo: {len(dets.get('smoke', []))}")
+            self.person_label.setText(f"Personas: {dets.get('persons', 0)}")
+            self.status_label.setText(status_text)
+            self.fps_label.setText(f"{self.engine.fps:.0f} FPS")
+        except Exception:
+            pass
 
 
-# ── Configuration Tab ──
 class ConfigTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
-        # Stove zone
         stove_group = QGroupBox("Zona Estufa")
         stove_group.setStyleSheet("QGroupBox{color:#ff9800;font-weight:bold;border:1px solid #333;border-radius:6px;margin-top:8px;padding-top:16px} QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px}")
         stove_inner = QVBoxLayout(stove_group)
-        stove_inner.addWidget(QLabel("Arrastrá el rectángulo para ajustar la zona"))
+        stove_inner.addWidget(QLabel("Arrastra el rectangulo para ajustar la zona"))
         self.sz_widget = StoveZoneWidget()
         stove_inner.addWidget(self.sz_widget)
 
@@ -287,7 +284,9 @@ class ConfigTab(QWidget):
 
         self.sz_widget.changed.connect(lambda x, y, w, h: (
             self.sz_x.setValue(x), self.sz_y.setValue(y),
-            self.sz_w.setValue(w), self.sz_h.setValue(h)
+            self.sz_w.setValue(w), self.sz_h.setValue(h),
+            cfg.STOVE_ZONE.update({"x": x, "y": y, "w": w, "h": h}),
+            cfg.save_config()
         ))
         for spin, attr in [(self.sz_x, 'x'), (self.sz_y, 'y'), (self.sz_w, 'w'), (self.sz_h, 'h')]:
             spin.valueChanged.connect(lambda v, a=attr: (
@@ -295,7 +294,22 @@ class ConfigTab(QWidget):
             ))
         layout.addWidget(stove_group)
 
-        # Parameters
+        cam_group = QGroupBox("Camara")
+        cam_group.setStyleSheet("QGroupBox{color:#ff9800;font-weight:bold;border:1px solid #333;border-radius:6px;margin-top:8px;padding-top:16px} QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px}")
+        cam_layout = QFormLayout(cam_group)
+        self.cam_combo = QComboBox()
+        for i in range(10):
+            self.cam_combo.addItem(f"Camara {i}", i)
+        self.cam_combo.setCurrentIndex(cfg.CAMERA_ID)
+        self.cam_combo.currentIndexChanged.connect(self._on_camera_change)
+        cam_layout.addRow("Dispositivo:", self.cam_combo)
+
+        self.auto_start_cb = QCheckBox("Iniciar con Windows")
+        self.auto_start_cb.setChecked(cfg.AUTO_START)
+        self.auto_start_cb.toggled.connect(self._on_auto_start)
+        cam_layout.addRow("", self.auto_start_cb)
+        layout.addWidget(cam_group)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea{border:none}")
@@ -307,7 +321,7 @@ class ConfigTab(QWidget):
 
         self._param_spins = {}
         last_cat = ""
-        for key, label, typ, mn, mx, step in CFG_KEYS:
+        for key, label, typ, mn, mx, step in cfg.CFG_META:
             cat = key.split("_")[0]
             if cat != last_cat:
                 gb = QGroupBox(cat)
@@ -328,17 +342,30 @@ class ConfigTab(QWidget):
                 spin.setRange(int(mn), int(mx))
                 spin.setSingleStep(int(step))
             spin.setValue(current_val)
-            spin.valueChanged.connect(lambda v, k=key, t=typ: setattr(cfg, k, float(v) if t == "float" else int(v)))
+            spin.valueChanged.connect(lambda v, k=key, t=typ: (
+                setattr(cfg, k, float(v) if t == "float" else int(v)),
+                cfg.save_config()
+            ))
             self._current_group_layout.addRow(label, spin)
             self._param_spins[key] = spin
 
-        # Save button
-        self.save_btn = QPushButton("Guardar")
-        self.save_btn.setStyleSheet("QPushButton{background:#ff9800;color:#111;padding:8px;border-radius:4px;font-weight:bold} QPushButton:hover{background:#ffa726}")
-        self.save_btn.clicked.connect(self._save_config)
-        self._params_layout.addWidget(self.save_btn)
-        self._save_msg = QLabel("")
-        self._params_layout.addWidget(self._save_msg)
+    def _on_camera_change(self, idx):
+        cfg.CAMERA_ID = idx
+        cfg.save_config()
+        QMessageBox.information(self, "Camara", f"Camara {idx} seleccionada.\nReinicie la app para aplicar el cambio.")
+
+    def _on_auto_start(self, checked):
+        cfg.AUTO_START = checked
+        cfg.save_config()
+        key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
+        if checked:
+            if getattr(sys, 'frozen', False):
+                exe = sys.executable
+            else:
+                exe = f'"{sys.executable}" "{__file__}"'
+            os.system(f'REG ADD "{key}" /V "CocinaP" /t REG_SZ /F /D "{exe}"')
+        else:
+            os.system(f'REG DELETE "{key}" /V "CocinaP" /F 2>nul')
 
     def load_values(self):
         for key, spin in self._param_spins.items():
@@ -347,26 +374,17 @@ class ConfigTab(QWidget):
         self.sz_widget.set_values(sz["x"], sz["y"], sz["w"], sz["h"])
         self.sz_x.setValue(sz["x"]); self.sz_y.setValue(sz["y"])
         self.sz_w.setValue(sz["w"]); self.sz_h.setValue(sz["h"])
-
-    def _save_config(self):
-        sz = cfg.STOVE_ZONE
-        sz["x"] = self.sz_x.value()
-        sz["y"] = self.sz_y.value()
-        sz["w"] = self.sz_w.value()
-        sz["h"] = self.sz_h.value()
-        self._save_msg.setText("✓ Guardado")
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(2000, lambda: self._save_msg.setText(""))
+        self.cam_combo.setCurrentIndex(cfg.CAMERA_ID)
+        self.auto_start_cb.setChecked(cfg.AUTO_START)
 
 
-# ── Alarms Tab ──
 class AlarmsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
 
         top = QHBoxLayout()
-        top.addWidget(QLabel("Últimas alarmas"))
+        top.addWidget(QLabel("Ultimas alarmas"))
         top.addStretch()
         clear_btn = QPushButton("Limpiar")
         clear_btn.setStyleSheet("QPushButton{background:#333;color:#eee;padding:4px 12px;border-radius:4px}")
@@ -382,7 +400,7 @@ class AlarmsTab(QWidget):
         text = f"[{alarm.get('time','')}] [{alarm.get('severity','')}] {alarm.get('message','')}"
         item = QListWidgetItem(text)
         sev = alarm.get("severity", "")
-        color = {"CRÍTICO": "#f44336", "ALTO": "#ff9800", "MEDIO": "#ffeb3b", "BAJO": "#4caf50"}.get(sev, "#888")
+        color = {"CRITICO": "#f44336", "ALTO": "#ff9800", "MEDIO": "#ffeb3b", "BAJO": "#4caf50"}.get(sev, "#888")
         item.setForeground(QColor(color))
         self.list_widget.insertItem(0, item)
         if self.list_widget.count() > 100:
@@ -392,30 +410,25 @@ class AlarmsTab(QWidget):
         self.list_widget.clear()
 
 
-# ── Main Window ──
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, splash=None):
         super().__init__()
         self.setWindowTitle("CocinaP - Seguridad en Cocina")
         self.setMinimumSize(960, 680)
         self.resize(1280, 800)
         self.setStyleSheet("QMainWindow{background:#111} QWidget{color:#eee;font-family:'Segoe UI',sans-serif}")
 
-        # Camera + engine
+        self._splash = splash
+
         self.camera = None
         self._camera_ok = False
-        try:
-            self.camera = CameraHandler()
-            self.camera.start()
-            self._camera_ok = True
-        except Exception as e:
-            print(f"[app] Cámara no disponible: {e}")
+        self._init_camera()
 
         self.engine = CocinaPEngine(
-            self.camera.get_frame if self._camera_ok else (lambda: None)
+            self.camera.get_frame if self._camera_ok else (lambda: None),
+            web_port=cfg.WEB_PORT,
         )
 
-        # Central widget
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
@@ -429,20 +442,15 @@ class MainWindow(QMainWindow):
         self.config_tab = ConfigTab()
         self.alarms_tab = AlarmsTab()
 
-        self.tabs.addTab(self.cam_tab, "📷 Cámara")
-        self.tabs.addTab(self.config_tab, "⚙ Config")
-        self.tabs.addTab(self.alarms_tab, "🔔 Alarmas")
+        self.tabs.addTab(self.cam_tab, "Camara")
+        self.tabs.addTab(self.config_tab, "Config")
+        self.tabs.addTab(self.alarms_tab, "Alarmas")
 
-        # Status bar
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet("QStatusBar{background:#1a1a1a;border-top:1px solid #333;color:#888;font-size:12px}")
         self.setStatusBar(self.status_bar)
-        if not self._camera_ok:
-            self.status_bar.showMessage("⚠ Cámara no disponible - solo configuración")
-        else:
-            self.status_bar.showMessage("Inicializando...")
+        self._update_status_bar()
 
-        # Menu
         menu = self.menuBar()
         menu.setStyleSheet("QMenuBar{background:#1a1a1a;color:#ccc} QMenuBar::item:selected{background:#333} QMenu{background:#1a1a1a;color:#ccc;border:1px solid #333} QMenu::item:selected{background:#ff9800;color:#111}")
         file_menu = menu.addMenu("Archivo")
@@ -453,32 +461,89 @@ class MainWindow(QMainWindow):
 
         help_menu = menu.addMenu("Ayuda")
         about_action = QAction("Acerca de", self)
-        about_action.triggered.connect(lambda: QMessageBox.about(self, "CocinaP", "Sistema de Seguridad en Cocina v2.0\nDetección de fuego, humo y cocina desatendida"))
+        about_action.triggered.connect(lambda: QMessageBox.about(self, "CocinaP", "CocinaP v1.0.1\nSistema de Seguridad en Cocina\nDeteccion de fuego, humo y cocina desatendida"))
         help_menu.addAction(about_action)
 
-        # Start engine
+        self._tray_icon = None
+        self._setup_tray()
+
         self.engine.start()
-        time.sleep(0.5)
+        QTimer.singleShot(500, self._finish_init)
+
+    def _init_camera(self):
+        try:
+            self.camera = CameraHandler()
+            self.camera.start()
+            self._camera_ok = True
+        except Exception as e:
+            print(f"[app] Camara no disponible: {e}")
+
+    def _finish_init(self):
         if self._camera_ok:
             self.cam_tab.start()
         self.config_tab.load_values()
         if self.engine.webui:
             self.engine.webui.push_status({"fire": [], "smoke": [], "persons": 0, "fire_coverage": 0, "smoke_coverage": 0, "pots_on_stove": []}, [], "Sistema listo" if self._camera_ok else "Sin camara")
-        self.status_bar.showMessage("✅ Sistema listo" if self._camera_ok else "⚠ Sin cámara")
+        self._update_status_bar()
 
-        # Poll engine status for alarms
+        if self._splash:
+            self._splash.close()
+
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._poll_status)
         self._status_timer.start(500)
 
+    def _update_status_bar(self):
+        if not self._camera_ok:
+            self.status_bar.showMessage("Sin camara - solo configuracion")
+        else:
+            self.status_bar.showMessage("Sistema listo")
+
+    def _setup_tray(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        self._tray_icon = QSystemTrayIcon(self)
+        self._tray_icon.setToolTip("CocinaP - Seguridad en Cocina")
+        tray_menu = QMenu()
+        show_action = tray_menu.addAction("Mostrar/Ocultar")
+        show_action.triggered.connect(self._toggle_visible)
+        tray_menu.addSeparator()
+        quit_action = tray_menu.addAction("Salir")
+        quit_action.triggered.connect(self.close)
+        self._tray_icon.setContextMenu(tray_menu)
+        self._tray_icon.activated.connect(self._tray_activated)
+        self._tray_icon.show()
+
+    def _tray_activated(self, reason):
+        if reason == QSystemTrayIcon.DoubleClick:
+            self._toggle_visible()
+
+    def _toggle_visible(self):
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+
     def _poll_status(self):
-        dets = self.engine.get_latest()
-        alerts, _, _ = self.engine.analyze(dets)
-        status_text, _ = self.engine.get_status(alerts, dets)
-        self.status_bar.showMessage(status_text)
-        if alerts:
-            worst = max(alerts, key=lambda a: {"CRÍTICO": 3, "ALTO": 2, "MEDIO": 1, "BAJO": 0}.get(a.get("severity", ""), 0))
-            self.alarms_tab.add_alarm(worst)
+        try:
+            dets = self.engine.get_latest()
+            alerts, _, _ = self.engine.analyze(dets)
+            status_text, _ = self.engine.get_status(alerts, dets)
+            self.status_bar.showMessage(status_text)
+            if alerts:
+                worst = max(alerts, key=lambda a: {"CRITICO": 3, "ALTO": 2, "MEDIO": 1, "BAJO": 0}.get(a.get("severity", ""), 0))
+                self.alarms_tab.add_alarm(worst)
+                if self._tray_icon and not self.isVisible():
+                    self._tray_icon.showMessage(
+                        "CocinaP - Alarma",
+                        f"[{worst.get('severity','')}] {worst.get('message','')}",
+                        QSystemTrayIcon.Warning,
+                        5000
+                    )
+        except Exception:
+            pass
 
     def closeEvent(self, event: QCloseEvent):
         self.cam_tab.stop()
@@ -488,12 +553,39 @@ class MainWindow(QMainWindow):
         event.accept()
 
 
+def _create_splash():
+    pixmap = QPixmap(400, 250)
+    pixmap.fill(QColor(26, 26, 46))
+    p = QPainter(pixmap)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(QColor(255, 152, 0))
+    p.setFont(QFont("Segoe UI", 22, QFont.Bold))
+    p.drawText(pixmap.rect(), Qt.AlignCenter, "CocinaP")
+    p.setPen(QColor(255, 255, 255, 180))
+    p.setFont(QFont("Segoe UI", 10))
+    p.drawText(pixmap.rect().adjusted(0, 40, 0, 0), Qt.AlignCenter, "Seguridad en Cocina")
+    p.setPen(QColor(255, 255, 255, 100))
+    p.setFont(QFont("Segoe UI", 8))
+    p.drawText(pixmap.rect().adjusted(0, 0, 0, -20), Qt.AlignBottom | Qt.AlignHCenter, "Cargando...")
+    p.end()
+    splash = QSplashScreen(pixmap)
+    splash.show()
+    return splash
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("CocinaP")
     app.setOrganizationName("CocinaP")
-    window = MainWindow()
+
+    sys.excepthook = _global_excepthook
+
+    splash = _create_splash()
+    app.processEvents()
+
+    window = MainWindow(splash=splash)
     window.show()
+
     sys.exit(app.exec())
 
 

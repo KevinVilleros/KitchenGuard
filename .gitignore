@@ -1,32 +1,74 @@
-# Modelos (descargar por separado)
+# ─── Modelos ──────────────────────────────────
 models/*.pt
 
-# Videos de prueba (agregar manualmente)
+# ─── Videos de prueba ────────────────────────
 data/videos/*.mp4
 
-# Cache
+# ─── Python ───────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+*.egg-info/
+venv/
+.venv/
+env/
+*.so
 
-# Logs
-logs/*.log
+# ─── Logs ─────────────────────────────────────
+*.log
+logs/
 
-# Temp
+# ─── Temp ─────────────────────────────────────
 *.tmp
 *.swp
 *.swo
+*~
+*.bak
 
-# IDE
+# ─── IDE ──────────────────────────────────────
 .vscode/
 .idea/
+*.sublime-*
 
-# OS
+# ─── OS ───────────────────────────────────────
 Thumbs.db
 .DS_Store
+Desktop.ini
 
-# PyInstaller build artifacts
+# ─── PyInstaller build artifacts ─────────────
 build/
 dist/
 *.spec
+stdout_build.txt
+stderr_build.txt
+
+# ─── Duplicate models in root ────────────────
+*.pt
+
+# ─── Flutter / Dart ──────────────────────────
+cocinap_mobile/.dart_tool/
+cocinap_mobile/.packages
+cocinap_mobile/build/
+cocinap_mobile/.flutter-plugins
+cocinap_mobile/.flutter-plugins-dependencies
+cocinap_mobile/.pub/
+cocinap_mobile/pubspec.lock
+cocinap_mobile/android/.gradle/
+cocinap_mobile/android/app/build/
+cocinap_mobile/android/build/
+cocinap_mobile/android/local.properties
+cocinap_mobile/android/key.jks
+cocinap_mobile/android/key.properties
+cocinap_mobile/ios/Pods/
+cocinap_mobile/ios/.symlinks/
+cocinap_mobile/ios/Flutter/Flutter.framework
+cocinap_mobile/ios/Flutter/App.framework
+
+# ─── Firebase ────────────────────────────────
+cocinap_mobile/android/app/google-services.json
+cocinap_mobile/ios/Runner/GoogleService-Info.plist
+**/firebase-key.json
+
+# ─── Configuración de usuario ────────────────
+%APPDATA%/CocinaP/

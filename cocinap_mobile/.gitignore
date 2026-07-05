@@ -1,0 +1,7 @@
+# Firebase config files (download from Firebase Console)
+google-services.json
+GoogleService-Info.plist
+firebase-key.json
+*.jks
+*.p12
+*.keystore
