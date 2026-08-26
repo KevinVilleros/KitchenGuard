@@ -610,15 +610,23 @@ class ConfigTab(QWidget):
     def _on_auto_start(self, checked):
         cfg.AUTO_START = checked
         cfg.save_config()
-        key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
-        if checked:
-            if getattr(sys, 'frozen', False):
-                exe = sys.executable
-            else:
-                exe = f'"{sys.executable}" "{__file__}"'
-            os.system(f'REG ADD "{key}" /V "CocinaP" /t REG_SZ /F /D "{exe}"')
-        else:
-            os.system(f'REG DELETE "{key}" /V "CocinaP" /F 2>nul')
+        try:
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
+                if checked:
+                    if getattr(sys, 'frozen', False):
+                        exe = sys.executable
+                    else:
+                        exe = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+                    winreg.SetValueEx(key, "CocinaP", 0, winreg.REG_SZ, exe)
+                else:
+                    try:
+                        winreg.DeleteValue(key, "CocinaP")
+                    except FileNotFoundError:
+                        pass
+        except Exception as e:
+            print(f"[app] Error configurando auto-start: {e}")
 
     def load_values(self):
         for key, spin in self._param_spins.items():
