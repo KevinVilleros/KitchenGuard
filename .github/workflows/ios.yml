@@ -1,0 +1,98 @@
+name: iOS Build CocinaP
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'cocinap_mobile/**'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  build-unsigned:
+    name: Build IPA (unsigned)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: cocinap_mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: CocoaPods install
+        run: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Build iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/*.app Payload/
+          zip -r CocinaP-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CocinaP-iOS
+          path: cocinap_mobile/CocinaP-unsigned.ipa
+          if-no-files-found: error
+
+  build-signed:
+    name: Build IPA (signed)
+    runs-on: macos-15
+    if: ${{ secrets.IOS_CERTIFICATE != '' && secrets.IOS_CERTIFICATE_PASSWORD != '' && secrets.IOS_PROVISIONING_PROFILE != '' }}
+    needs: build-unsigned
+    defaults:
+      run:
+        working-directory: cocinap_mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Import signing certificate
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          echo "$IOS_CERTIFICATE" | base64 --decode > cert.p12
+          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
+
+          security create-keychain -p cocinap build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p cocinap build.keychain
+          security import cert.p12 -k build.keychain -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k cocinap build.keychain
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp profile.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: CocoaPods install
+        run: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Build signed IPA
+        run: flutter build ipa --release --export-method ad-hoc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CocinaP-iOS-signed
+          path: cocinap_mobile/build/ios/ipa/*.ipa
+          if-no-files-found: error
