@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QDoubleSpinBox, QSpinBox, QCheckBox, QListWidget,
     QListWidgetItem, QMessageBox, QStatusBar, QFrame, QSizePolicy,
     QFormLayout, QComboBox, QSystemTrayIcon, QMenu, QSplashScreen, QDialog,
+    QRadioButton, QButtonGroup, QLineEdit,
 )
 
 import socket
@@ -550,12 +551,37 @@ class ConfigTab(QWidget):
         cam_group = QGroupBox("Camara")
         cam_group.setStyleSheet("QGroupBox{color:#ff9800;font-weight:bold;border:1px solid #333;border-radius:6px;margin-top:8px;padding-top:16px} QGroupBox::title{subcontrol-origin:margin;left:10px;padding:0 4px}")
         cam_layout = QFormLayout(cam_group)
+
+        cam_type_layout = QHBoxLayout()
+        self.cam_local_rb = QRadioButton("Local (USB)")
+        self.cam_network_rb = QRadioButton("Red (RTSP/HTTP)")
+        self._cam_type_group = QButtonGroup(self)
+        self._cam_type_group.addButton(self.cam_local_rb, 0)
+        self._cam_type_group.addButton(self.cam_network_rb, 1)
+        cam_type_layout.addWidget(self.cam_local_rb)
+        cam_type_layout.addWidget(self.cam_network_rb)
+        cam_layout.addRow("Tipo:", cam_type_layout)
+
         self.cam_combo = QComboBox()
         for i in range(10):
             self.cam_combo.addItem(f"Camara {i}", i)
         self.cam_combo.setCurrentIndex(cfg.CAMERA_ID)
         self.cam_combo.currentIndexChanged.connect(self._on_camera_change)
         cam_layout.addRow("Dispositivo:", self.cam_combo)
+
+        self.cam_url_input = QLineEdit()
+        self.cam_url_input.setPlaceholderText("rtsp://usuario:pass@192.168.1.100:554/stream")
+        self.cam_url_input.setText(cfg.CAMERA_URL)
+        self.cam_url_input.returnPressed.connect(self._on_camera_url_change)
+        cam_layout.addRow("URL:", self.cam_url_input)
+
+        is_network = bool(cfg.CAMERA_URL.strip())
+        self.cam_local_rb.setChecked(not is_network)
+        self.cam_network_rb.setChecked(is_network)
+        self.cam_combo.setEnabled(not is_network)
+        self.cam_url_input.setEnabled(is_network)
+        self.cam_local_rb.toggled.connect(self._on_cam_type_toggle)
+        self.cam_network_rb.toggled.connect(self._on_cam_type_toggle)
 
         self.auto_start_cb = QCheckBox("Iniciar con Windows")
         self.auto_start_cb.setChecked(cfg.AUTO_START)
@@ -604,8 +630,36 @@ class ConfigTab(QWidget):
 
     def _on_camera_change(self, idx):
         cfg.CAMERA_ID = idx
+        cfg.CAMERA_URL = ""
+        self.cam_url_input.setText("")
         cfg.save_config()
         QMessageBox.information(self, "Camara", f"Camara {idx} seleccionada.\nReinicie la app para aplicar el cambio.")
+
+    def _on_cam_type_toggle(self):
+        is_network = self.cam_network_rb.isChecked()
+        self.cam_combo.setEnabled(not is_network)
+        self.cam_url_input.setEnabled(is_network)
+        if not is_network:
+            cfg.CAMERA_URL = ""
+            cfg.CAMERA_ID = self.cam_combo.currentIndex()
+        else:
+            cfg.CAMERA_URL = self.cam_url_input.text().strip()
+        cfg.save_config()
+
+    def _on_camera_url_change(self):
+        url = self.cam_url_input.text().strip()
+        if url:
+            import re
+            if not re.match(r"^(rtsp|rtmp|http|https)://", url, re.IGNORECASE):
+                QMessageBox.warning(self, "URL invalida", "La URL debe comenzar con rtsp://, rtmp://, http:// o https://")
+                return
+            cfg.CAMERA_URL = url
+            self.cam_network_rb.setChecked(True)
+        else:
+            cfg.CAMERA_URL = ""
+            self.cam_local_rb.setChecked(True)
+        cfg.save_config()
+        QMessageBox.information(self, "Camara", "URL actualizada.\nReinicie la app para aplicar el cambio.")
 
     def _on_auto_start(self, checked):
         cfg.AUTO_START = checked
