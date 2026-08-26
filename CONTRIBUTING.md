@@ -1,47 +1,94 @@
-# Guía de Contribución
+# Guia de Contribucion
 
-Gracias por tu interés en contribuir a **CocinaP**. Este es un proyecto comercial
-y el código fuente no está abierto a contribuciones externas sin autorización previa.
+Gracias por tu interes en contribuir a **CocinaP**. Este es un proyecto comercial
+y el codigo fuente no esta abierto a contribuciones externas sin autorizacion previa.
+
+---
 
 ## Reportar Issues
 
-Si encontraste un bug o tenés una sugerencia:
+Si encontraste un bug o tenes una sugerencia:
 
-1. Verificá que el issue no exista ya en [GitHub Issues](https://github.com/KevinVilleros/KitchenGuard/issues)
-2. Usá la plantilla de bug report o feature request
-3. Incluí:
-   - Versión de CocinaP (se ve en Acerca de)
+1. Verifica que el issue no exista ya en [GitHub Issues](https://github.com/KevinVilleros/KitchenGuard/issues)
+2. Usa la plantilla de bug report o feature request
+3. Incluye:
+   - Version de CocinaP (se ve en Acerca de)
    - Sistema operativo (Windows 10/11)
    - Pasos para reproducir el bug
    - Logs de error (en `%APPDATA%\CocinaP\logs\crash.log`)
    - Capturas de pantalla si aplica
 
+---
+
 ## Proceso de Desarrollo
 
 1. Fork del repositorio (solo para contributors autorizados)
 2. Crear rama: `git checkout -b feature/nombre-corto`
-3. Commits con mensajes descriptivos en español
-4. Hacer lint del código antes de commit:
-   ```bash
-   ruff check cocinap/    # Python
-   cd cocinap_mobile && flutter analyze  # Flutter
-   ```
-5. Crear Pull Request a la rama `develop`
+3. Commits con mensajes descriptivos en espanol
+4. Hacer lint del codigo antes de commit:
 
-## Estándares de Código
+```bash
+# Python
+ruff check cocinap/
+ruff format cocinap/
+
+# Flutter
+cd cocinap_mobile && flutter analyze
+```
+
+5. Ejecutar tests:
+
+```bash
+pytest
+```
+
+6. Crear Pull Request a la rama `develop`
+
+---
+
+## Estandares de Codigo
 
 ### Python
-- PEP 8
-- Ruff para linting
-- Type hints en funciones públicas
-- Nombres en inglés para código, español para UI/user-facing strings
 
-### Flutter/Dart
-- flutter_lints configurado
-- Provider para estado (no BLoC)
-- Nombres en inglés para código, español para UI
+- **Style:** PEP 8, enforced by Ruff
+- **Line length:** 120 characters max
+- **Type hints:** required on all public functions
+- **Naming:** English for code, Spanish for UI/user-facing strings
+- **Tests:** pytest, one test file per module in `tests/`
+
+### Flutter / Dart
+
+- **Linting:** `flutter_lints` configurado
+- **State management:** Provider (no BLoC)
+- **Naming:** English for code, Spanish for UI
+
+---
+
+## Estructura de Commits
+
+```
+<tipo>: <descripcion corta en espanol>
+
+Tipos:
+  feat     Nueva funcionalidad
+  fix      Correccion de bug
+  docs     Documentacion
+  style    Formato (sin cambio de logica)
+  refactor Refactorizacion
+  test     Tests
+  build    Build o dependencias
+  ci       Configuracion de CI
+```
+
+Ejemplo:
+```
+feat: agregar alarma sonora para humo
+fix: corregir cobertura de fuego en baja resolucion
+```
+
+---
 
 ## Licencia
 
-Al contribuir, aceptás que tu código pasa a ser propiedad de CocinaP y
-estará sujeto a los términos de la [licencia comercial](LICENSE).
+Al contribuir, aceptas que tu codigo pasa a ser propiedad de CocinaP y
+estara sujeto a los terminos de la [licencia comercial](LICENSE).
