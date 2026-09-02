@@ -72,7 +72,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final server = context.watch<ServerProvider>();
     final streamUrl = server.status == ConnectionStatus.connected
-        ? "${server.serverUrl}/api/stream"
+        ? server.apiService.streamUrl
         : "";
 
     final fire = _status["fire_regions"] ?? 0;

@@ -26,6 +26,14 @@ class ServerProvider extends ChangeNotifier {
 
   ServerProvider(this.api, this.discovery, this.settings, this.fcm) {
     _loadRecents();
+    _loadApiKey();
+  }
+
+  Future<void> _loadApiKey() async {
+    final key = await settings.getApiKey();
+    if (key.isNotEmpty) {
+      api.updateApiKey(key);
+    }
   }
 
   ConnectionStatus get status => _status;
@@ -41,6 +49,12 @@ class ServerProvider extends ChangeNotifier {
   void setServerUrl(String url) {
     _serverUrl = url;
     api.updateBaseUrl(url);
+    notifyListeners();
+  }
+
+  Future<void> setApiKey(String key) async {
+    api.updateApiKey(key);
+    await settings.setApiKey(key);
     notifyListeners();
   }
 

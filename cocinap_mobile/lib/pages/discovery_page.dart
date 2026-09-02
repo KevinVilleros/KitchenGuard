@@ -13,7 +13,7 @@ class DiscoveryPage extends StatefulWidget {
 
 class _DiscoveryPageState extends State<DiscoveryPage> {
   final TextEditingController _urlCtrl = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _keyCtrl = TextEditingController();
   MobileScannerController? _scannerController;
 
   @override
@@ -23,6 +23,9 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
     if (server.serverUrl.isNotEmpty) {
       _urlCtrl.text = server.serverUrl;
     }
+    if (server.apiService.apiKey.isNotEmpty) {
+      _keyCtrl.text = server.apiService.apiKey;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       server.autoConnect();
     });
@@ -31,12 +34,31 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   @override
   void dispose() {
     _urlCtrl.dispose();
+    _keyCtrl.dispose();
     _scannerController?.dispose();
     super.dispose();
   }
 
-  void _connect(String url) {
-    context.read<ServerProvider>().connectTo(url);
+  Future<void> _connect(String url, {String? apiKey}) async {
+    final server = context.read<ServerProvider>();
+    if (apiKey != null && apiKey.isNotEmpty) {
+      await server.setApiKey(apiKey);
+    }
+    await server.connectTo(url);
+  }
+
+  /// Parse QR payload. Supports:
+  /// - "http://ip:port"
+  /// - "http://ip:port|KEY"  (URL + API key separated by |)
+  void _handleQrResult(String raw) {
+    var url = raw;
+    String? key;
+    if (url.contains("|")) {
+      final parts = url.split("|");
+      url = parts[0].trim();
+      key = parts.length > 1 ? parts[1].trim() : null;
+    }
+    _connect(url, apiKey: key);
   }
 
   void _scanQr() {
@@ -49,7 +71,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
         .push(MaterialPageRoute(builder: (_) => _QrScannerPage(controller: controller)))
         .then((value) {
       if (value is String && value.isNotEmpty) {
-        _connect(value);
+        _handleQrResult(value);
       }
     });
   }
@@ -177,36 +199,49 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
                 ExpansionTile(
                   leading: const Icon(Icons.link),
                   title: const Text("Conexion manual", style: TextStyle(fontSize: 14)),
-                  subtitle: const Text("Escribe la direccion del PC", style: TextStyle(fontSize: 12)),
+                  subtitle: const Text("Direccion del PC y API key", style: TextStyle(fontSize: 12)),
                   tilePadding: EdgeInsets.zero,
                   childrenPadding: const EdgeInsets.only(bottom: 8),
                   children: [
-                    Form(
-                      key: _formKey,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _urlCtrl,
-                              decoration: const InputDecoration(
-                                hintText: "http://192.168.1.100:8080",
-                                labelText: "URL del servidor",
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                              keyboardType: TextInputType.url,
-                              onFieldSubmitted: (_) => _connect(_urlCtrl.text.trim()),
-                            ),
+                    Column(
+                      children: [
+                        TextFormField(
+                          controller: _urlCtrl,
+                          decoration: const InputDecoration(
+                            hintText: "http://192.168.1.100:8080",
+                            labelText: "URL del servidor",
+                            border: OutlineInputBorder(),
+                            isDense: true,
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
+                          keyboardType: TextInputType.url,
+                          onFieldSubmitted: (_) =>
+                              _connect(_urlCtrl.text.trim(), apiKey: _keyCtrl.text.trim()),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _keyCtrl,
+                          decoration: const InputDecoration(
+                            hintText: "API key (aparece al iniciar el PC)",
+                            labelText: "API key",
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          obscureText: true,
+                          onFieldSubmitted: (_) =>
+                              _connect(_urlCtrl.text.trim(), apiKey: _keyCtrl.text.trim()),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
                             onPressed: server.status == ConnectionStatus.connecting
                                 ? null
-                                : () => _connect(_urlCtrl.text.trim()),
-                            child: const Text("Conectar"),
+                                : () => _connect(_urlCtrl.text.trim(), apiKey: _keyCtrl.text.trim()),
+                            icon: const Icon(Icons.link),
+                            label: const Text("Conectar"),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

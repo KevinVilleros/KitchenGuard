@@ -9,11 +9,13 @@ import 'services/background_service.dart';
 import 'providers/server_provider.dart';
 import 'providers/alarms_provider.dart';
 import 'providers/config_provider.dart';
+import 'providers/standalone_provider.dart';
 import 'pages/discovery_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/alarms_page.dart';
 import 'pages/config_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/standalone_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,7 @@ void main() async {
   final discovery = DiscoveryService();
   final settings = SettingsService();
   final fcm = FcmService();
+  final standalone = StandaloneProvider();
 
   try {
     await Firebase.initializeApp();
@@ -38,6 +41,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ServerProvider(api, discovery, settings, fcm)),
         ChangeNotifierProvider(create: (_) => AlarmsProvider(api)),
         ChangeNotifierProvider(create: (_) => ConfigProvider(api)),
+        ChangeNotifierProvider(create: (_) => standalone),
         Provider.value(value: settings),
         Provider.value(value: api),
       ],
@@ -76,23 +80,24 @@ class _MainShellState extends State<MainShell> {
   bool _wasConnected = false;
 
   final _pages = const [
+    StandalonePage(),
     DiscoveryPage(),
     DashboardPage(),
     AlarmsPage(),
-    ConfigPage(),
     SettingsPage(),
   ];
 
   @override
   Widget build(BuildContext context) {
     final server = context.watch<ServerProvider>();
+    final standalone = context.watch<StandaloneProvider>();
     final isConnected = server.status == ConnectionStatus.connected;
 
-    // When connection succeeds while on the "Conectar" tab, jump to Camera.
-    if (isConnected && !_wasConnected && _currentIndex == 0) {
+    // When connection succeeds, jump to camera.
+    if (isConnected && !_wasConnected) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && isConnected) {
-          setState(() => _currentIndex = 1);
+        if (mounted && isConnected && _currentIndex == 1) {
+          setState(() => _currentIndex = 2);
         }
       });
     }
@@ -107,6 +112,10 @@ class _MainShellState extends State<MainShell> {
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: [
+          NavigationDestination(
+            icon: Icon(Icons.phone_android, color: standalone.timerRunning ? Colors.orange : null),
+            label: "Monitoreo",
+          ),
           const NavigationDestination(
             icon: Icon(Icons.search),
             label: "Conectar",
@@ -118,10 +127,6 @@ class _MainShellState extends State<MainShell> {
           NavigationDestination(
             icon: Icon(Icons.warning_amber, color: isConnected ? Colors.orange : null),
             label: "Alarmas",
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.settings),
-            label: "Config",
           ),
           const NavigationDestination(
             icon: Icon(Icons.tune),

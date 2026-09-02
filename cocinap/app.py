@@ -389,6 +389,7 @@ class CameraTab(QWidget):
             QMessageBox.information(self, "Conexion", "No hay servidor activo.")
             return
         port = self.engine.webui.port if self.engine.webui else 8080
+        api_key = self.engine.webui.get_api_key() if (self.engine and self.engine.webui) else ""
         try:
             import qrcode
             from io import BytesIO
@@ -397,6 +398,7 @@ class CameraTab(QWidget):
             QMessageBox.information(
                 self, "Conexion manual",
                 f"Introduce en la app movil:\n\n{text}\n\n"
+                f"API key: {api_key or '(no disponible)'}\n\n"
                 "Opcion: 'Buscar en la red' si mDNS funciona."
             )
             return
@@ -413,8 +415,9 @@ class CameraTab(QWidget):
         h = QHBoxLayout()
         for ip in urls:
             url = f"http://{ip}:{port}"
+            payload = f"{url}|{api_key}" if api_key else url
             qr = qrcode.QRCode(box_size=6, border=2, error_correction=qrcode.constants.ERROR_CORRECT_M)
-            qr.add_data(url)
+            qr.add_data(payload)
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
             buf = BytesIO()
@@ -432,6 +435,12 @@ class CameraTab(QWidget):
             cell.addWidget(txt)
             h.addLayout(cell)
         v.addLayout(h)
+        if api_key:
+            kt = QLabel(f"API key: {api_key}")
+            kt.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            kt.setAlignment(Qt.AlignCenter)
+            kt.setStyleSheet("color:#ffb74d;font-size:12px;font-family:monospace")
+            v.addWidget(kt)
 
         close_btn = QPushButton("Cerrar")
         close_btn.setStyleSheet("QPushButton{background:#2e7d32;color:#fff;padding:6px 24px;border-radius:4px;font-weight:bold}"

@@ -63,6 +63,16 @@ def test_auth_constant_time_comparison():
     assert abs(correct_time - wrong_time) < 0.1
 
 
+def test_auth_raw_key_roundtrip():
+    """Verify the raw API key can be recovered for QR after generation."""
+    auth = ApiKeyAuth()
+    key = auth.initialize()
+    assert auth.validate(key) is True
+    raw = auth.get_raw_key()
+    assert raw == key
+    assert len(raw) == 64
+
+
 # ---- Rate Limiter Tests ----
 
 def test_rate_limiter_allows_normal_requests():

@@ -35,6 +35,8 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>CocinaP necesita acceso a la red local para encontrar y conectarse al servidor de monitoreo de tu cocina.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>CocinaP usa la cámara para detectar la presencia de personas en la cocina y monitorear si quedó desatendida.</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

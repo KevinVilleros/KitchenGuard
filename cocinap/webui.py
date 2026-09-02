@@ -476,6 +476,10 @@ class WebUI:
         with self._lock:
             return list(self._alarms[-50:])
 
+    def get_api_key(self) -> str:
+        """Return the raw API key for QR/manual connection."""
+        return self.auth.get_raw_key() if self.auth else ""
+
     def push_status(self, detections, alerts, status_text, timer=None):
         now = time.strftime("%H:%M:%S")
         last_alarm = None

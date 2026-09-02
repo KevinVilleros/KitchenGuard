@@ -25,7 +25,8 @@ class AlarmsProvider extends ChangeNotifier {
 
   void _startSSE() async {
     try {
-      final request = http.Request("GET", Uri.parse("${api.baseUrl}/api/events"));
+      final request = http.Request("GET", Uri.parse(api.eventsUrl));
+      request.headers["X-API-Key"] = api.apiKey;
       final response = await _client!.send(request);
 
       _connected = true;
