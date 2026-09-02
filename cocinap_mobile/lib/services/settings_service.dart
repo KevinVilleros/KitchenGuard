@@ -9,6 +9,9 @@ class SettingsService {
   static const _keyStandaloneNoPerson = 'standalone_no_person_seconds';
   static const _keyStandaloneDanger = 'standalone_danger_minutes';
   static const _keyStandaloneConfidence = 'standalone_confidence';
+  static const _keyStandaloneSource = 'standalone_source';
+  static const _keyStandaloneCameraUrl = 'standalone_camera_url';
+  static const _keyHasSeenInstallGuide = 'has_seen_install_guide';
   static const _maxRecents = 5;
 
   Future<String?> getServerUrl() async {
@@ -64,6 +67,36 @@ class SettingsService {
   Future<void> setStandaloneConfidence(double value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyStandaloneConfidence, value);
+  }
+
+  Future<String> getStandaloneSource() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyStandaloneSource) ?? 'phone';
+  }
+
+  Future<void> setStandaloneSourceIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyStandaloneSource, index == 1 ? 'ip' : 'phone');
+  }
+
+  Future<String> getStandaloneCameraUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyStandaloneCameraUrl) ?? "";
+  }
+
+  Future<void> setStandaloneCameraUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyStandaloneCameraUrl, url);
+  }
+
+  Future<bool> getHasSeenInstallGuide() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyHasSeenInstallGuide) ?? false;
+  }
+
+  Future<void> setHasSeenInstallGuide(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyHasSeenInstallGuide, value);
   }
 
   Future<void> setServerUrl(String url) async {

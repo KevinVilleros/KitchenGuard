@@ -1,0 +1,34 @@
+// Alinea la compatibilidad JVM de Java (compileOptions) y Kotlin (jvmTarget)
+// en todos los subproyectos de Android, incluidos los plugins (p. ej.
+// tflite_flutter, que fija Java 11). Evita el error
+// "Inconsistent JVM-target compatibility" al compilar con JDK recientes.
+subprojects {
+    def target = JavaVersion.VERSION_11
+
+    afterEvaluate { proj ->
+        // Android: fija compileOptions de Java a un valor consistente.
+        if (proj.extensions.findByName("android") != null) {
+            def androidExt = proj.extensions.getByName("android")
+            try {
+                androidExt.compileOptions {
+                    sourceCompatibility = target
+                    targetCompatibility = target
+                }
+            } catch (Throwable ignored) {
+                // El DSL puede variar entre versiones de AGP; ignoramos y
+                // seguimos alineando Kotlin y las tareas de Java a nivel global.
+            }
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = "11"
+        targetCompatibility = "11"
+    }
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = "11"
+        }
+    }
+}

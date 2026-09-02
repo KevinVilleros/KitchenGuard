@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../providers/server_provider.dart';
 import '../providers/standalone_provider.dart';
 import '../services/settings_service.dart';
+import '../content/content.dart';
+import 'ip_camera_page.dart';
+import 'help_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -33,6 +36,12 @@ class _SettingsPageState extends State<SettingsPage> {
     standalone.setNoPersonAlertSeconds(await settings.getStandaloneNoPersonSeconds());
     standalone.setDangerMinutes(await settings.getStandaloneDangerMinutes());
     standalone.setConfidence(await settings.getStandaloneConfidence());
+
+    final src = await settings.getStandaloneSource();
+    standalone.setCameraSource(src == 'ip'
+        ? StandaloneCameraSource.ipCamera
+        : StandaloneCameraSource.phone);
+    standalone.setCameraUrl(await settings.getStandaloneCameraUrl());
   }
 
   @override
@@ -70,10 +79,23 @@ class _SettingsPageState extends State<SettingsPage> {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 6),
             child: Text(
-              "Monitoreo independiente (cámara del móvil)",
+              "Monitoreo independiente",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
+
+          // Fuente de cámara
+          ListTile(
+            leading: const Icon(Icons.videocam),
+            title: const Text("Fuente de cámara"),
+            subtitle: Text(standalone.cameraSourceLabel),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const IpCameraPage()),
+            ),
+          ),
+          const Divider(),
 
           // Duración del temporizador
           ListTile(
@@ -169,6 +191,19 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: Icon(Icons.smartphone),
             title: Text("En el móvil (TFLite)"),
             subtitle: Text("El modelo se ejecuta en el dispositivo, sin necesidad de PC"),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.help_outline),
+            title: const Text("Manual de uso, guía y términos"),
+            subtitle: Text(AppLocal.language == "en"
+                ? "User manual, camera guide & terms"
+                : "Manual, guía de cámaras y términos"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HelpPage()),
+            ),
           ),
         ],
       ),

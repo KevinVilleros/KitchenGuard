@@ -59,25 +59,6 @@ class ApiService {
     return data["ok"] == true;
   }
 
-  Future<bool> registerToken(String token) async {
-    final r = await http.post(
-      Uri.parse("$_baseUrl/api/register_token"),
-      headers: _authHeaders,
-      body: json.encode({"token": token}),
-    ).timeout(const Duration(seconds: 5));
-    if (r.statusCode != 200) return false;
-    final data = json.decode(r.body);
-    return data["ok"] == true;
-  }
-
-  Future<void> unregisterToken(String token) async {
-    await http.post(
-      Uri.parse("$_baseUrl/api/unregister_token"),
-      headers: _authHeaders,
-      body: json.encode({"token": token}),
-    ).timeout(const Duration(seconds: 5));
-  }
-
   Future<Map<String, dynamic>> getInfo() async {
     final r = await http.get(
       Uri.parse("$_baseUrl/api/info"),

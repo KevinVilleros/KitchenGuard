@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/discovery_service.dart';
 import '../services/settings_service.dart';
-import '../services/fcm_service.dart';
 
 enum ConnectionStatus { disconnected, connecting, connected, error }
 
@@ -11,7 +10,6 @@ class ServerProvider extends ChangeNotifier {
   final ApiService api;
   final DiscoveryService discovery;
   final SettingsService settings;
-  final FcmService fcm;
 
   ConnectionStatus _status = ConnectionStatus.disconnected;
   String _serverUrl = "";
@@ -24,7 +22,7 @@ class ServerProvider extends ChangeNotifier {
   Timer? _searchTimer;
   bool _disposed = false;
 
-  ServerProvider(this.api, this.discovery, this.settings, this.fcm) {
+  ServerProvider(this.api, this.discovery, this.settings) {
     _loadRecents();
     _loadApiKey();
   }
@@ -145,9 +143,6 @@ class ServerProvider extends ChangeNotifier {
       _errorMessage = "";
       await settings.setServerUrl(_serverUrl);
       await _loadRecents();
-
-      // Register FCM token once connected to server
-      await fcm.registerWithServer(api);
     } catch (e) {
       _status = ConnectionStatus.error;
       _errorMessage = e.toString();

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'services/api_service.dart';
 import 'services/discovery_service.dart';
 import 'services/settings_service.dart';
-import 'services/fcm_service.dart';
 import 'services/background_service.dart';
 import 'providers/server_provider.dart';
 import 'providers/alarms_provider.dart';
@@ -13,9 +11,9 @@ import 'providers/standalone_provider.dart';
 import 'pages/discovery_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/alarms_page.dart';
-import 'pages/config_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/standalone_page.dart';
+import 'pages/camera_install_guide_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,13 +21,7 @@ void main() async {
   final api = ApiService("");
   final discovery = DiscoveryService();
   final settings = SettingsService();
-  final fcm = FcmService();
   final standalone = StandaloneProvider();
-
-  try {
-    await Firebase.initializeApp();
-    await fcm.init();
-  } catch (_) {}
 
   try {
     await BackgroundServiceManager.init();
@@ -38,7 +30,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ServerProvider(api, discovery, settings, fcm)),
+        ChangeNotifierProvider(create: (_) => ServerProvider(api, discovery, settings)),
         ChangeNotifierProvider(create: (_) => AlarmsProvider(api)),
         ChangeNotifierProvider(create: (_) => ConfigProvider(api)),
         ChangeNotifierProvider(create: (_) => standalone),
@@ -50,8 +42,28 @@ void main() async {
   );
 }
 
-class CocinaPApp extends StatelessWidget {
+class CocinaPApp extends StatefulWidget {
   const CocinaPApp({super.key});
+
+  @override
+  State<CocinaPApp> createState() => _CocinaPAppState();
+}
+
+class _CocinaPAppState extends State<CocinaPApp> {
+  bool? _showInstallGuide;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInstallGuideFlag();
+  }
+
+  Future<void> _loadInstallGuideFlag() async {
+    final settings = SettingsService();
+    final seen = await settings.getHasSeenInstallGuide();
+    if (!mounted) return;
+    setState(() => _showInstallGuide = !seen);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +75,12 @@ class CocinaPApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
-      home: const MainShell(),
+      routes: {
+        '/main': (context) => const MainShell(),
+      },
+      home: _showInstallGuide == null
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          : (_showInstallGuide! ? const CameraInstallGuidePage() : const MainShell()),
     );
   }
 }

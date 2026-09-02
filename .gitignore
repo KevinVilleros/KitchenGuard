@@ -72,3 +72,7 @@ cocinap_mobile/ios/Runner/GoogleService-Info.plist
 
 # ─── Configuración de usuario ────────────────
 %APPDATA%/CocinaP/
+
+# ─── Pruebas temporales (modelos/py) ─────────
+modeltest*.txt
+venvtest.txt

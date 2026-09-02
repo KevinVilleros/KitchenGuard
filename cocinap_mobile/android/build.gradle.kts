@@ -11,6 +11,11 @@ val newBuildDir: Directory =
         .get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
+// Aplica un script Groovy que alinea los targets JVM de Java y Kotlin en todos
+// los módulos (incluidos plugins como tflite_flutter), evitando el error
+// "Inconsistent JVM-target compatibility".
+apply(from = "jvm-targets.gradle")
+
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)

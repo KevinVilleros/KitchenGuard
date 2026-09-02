@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,10 +8,11 @@ import '../providers/standalone_provider.dart';
 import '../providers/server_provider.dart';
 import '../services/background_service.dart';
 import '../services/person_detector.dart';
+import '../services/mjpeg_service.dart';
 
-/// Página del modo independiente: monitorea la cocina con la cámara del móvil,
-/// usando un temporizador configurable. Si no se detecta una persona durante
-/// el plazo, emite alertas.
+/// Página del modo independiente: monitorea la cocina en el móvil (con la
+/// cámara del dispositivo o una cámara IP) usando un temporizador configurable.
+/// Si no se detecta una persona durante el plazo, emite alertas.
 class StandalonePage extends StatefulWidget {
   const StandalonePage({super.key});
 
@@ -21,16 +23,35 @@ class StandalonePage extends StatefulWidget {
 class _StandalonePageState extends State<StandalonePage> {
   CameraController? _camera;
   final PersonDetector _detector = PersonDetector();
+  final MjpegService _mjpeg = MjpegService();
   Timer? _alertTimer;
+  StreamSubscription<Uint8List>? _ipStreamSub;
   bool _cameraError = false;
   bool _detectorLoading = false;
+  Uint8List? _lastIpFrame;
+  StandaloneCameraSource _lastSource = StandaloneCameraSource.phone;
+  String _lastUrl = "";
+  bool _initStarted = false;
 
   @override
   void initState() {
     super.initState();
     _loadDetector();
-    _initCamera();
+    _initVideo();
     _startAlertLoop();
+    _lastSource = context.read<StandaloneProvider>().cameraSource;
+    _lastUrl = context.read<StandaloneProvider>().cameraUrl;
+    context.read<StandaloneProvider>().addListener(_onProviderChanged);
+  }
+
+  void _onProviderChanged() {
+    final standalone = context.read<StandaloneProvider>();
+    if (standalone.cameraSource != _lastSource ||
+        standalone.cameraUrl != _lastUrl) {
+      _lastSource = standalone.cameraSource;
+      _lastUrl = standalone.cameraUrl;
+      _initVideo();
+    }
   }
 
   Future<void> _loadDetector() async {
@@ -43,16 +64,33 @@ class _StandalonePageState extends State<StandalonePage> {
     if (mounted) setState(() => _detectorLoading = false);
   }
 
-  Future<void> _initCamera() async {
+  Future<void> _initVideo() async {
     final standalone = context.read<StandaloneProvider>();
+    final source = standalone.cameraSource;
+    _lastSource = source;
+    _lastUrl = standalone.cameraUrl;
+
+    _stopVideo();
+
+    if (source == StandaloneCameraSource.ipCamera) {
+      final url = standalone.cameraUrl;
+      if (url.isEmpty) {
+        setState(() => _cameraError = true);
+        return;
+      }
+      standalone.setCameraActive(true);
+      _startIpStream(url);
+      return;
+    }
+
+    // Fuente: cámara del móvil.
     try {
       final cameras = await availableCameras();
       if (!mounted || cameras.isEmpty) {
         setState(() => _cameraError = true);
         return;
       }
-      // Preferir cámara trasera (apunta a la cocina).
-      final CameraDescription back;
+      late CameraDescription back;
       try {
         back = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.back);
       } catch (_) {
@@ -61,21 +99,32 @@ class _StandalonePageState extends State<StandalonePage> {
       final controller = CameraController(back, ResolutionPreset.medium);
       await controller.initialize();
       if (!mounted) return;
+      setState(() => _cameraError = false);
       setState(() => _camera = controller);
       standalone.setCameraActive(true);
-      _startImageStream();
+      _startPhoneStream();
     } catch (_) {
       if (mounted) setState(() => _cameraError = true);
     }
   }
 
-  /// Stream de frames de la cámara → detección de personas.
-  void _startImageStream() {
+  /// Consume un stream MJPEG de una cámara IP y lo envía al detector.
+  void _startIpStream(String url) {
+    _lastIpFrame = null;
+    _ipStreamSub = _mjpeg.start(url).listen((frame) async {
+      if (mounted) setState(() => _lastIpFrame = frame);
+      if (_detectorLoading || !_detector.loaded) return;
+      final count = await _detector.detectFromJpeg(frame,
+          confidence: context.read<StandaloneProvider>().confidence);
+      context.read<StandaloneProvider>().onPersonDetected(count);
+    });
+  }
+
+  /// Stream de frames de la cámara del móvil → detección de personas.
+  void _startPhoneStream() {
     _camera!.startImageStream((cameraImage) async {
       if (_detectorLoading || !_detector.loaded) return;
 
-      // Usar el plano Y (luminancia) como imagen en escala de grises.
-      // Es visualmente suficiente para detección de personas con SSD.
       try {
         final plane = cameraImage.planes.first;
         final width = cameraImage.width;
@@ -96,6 +145,15 @@ class _StandalonePageState extends State<StandalonePage> {
     });
   }
 
+  void _stopVideo() {
+    _ipStreamSub?.cancel();
+    _ipStreamSub = null;
+    _mjpeg.stop();
+    _camera?.dispose();
+    _camera = null;
+    _lastIpFrame = null;
+  }
+
   void _startAlertLoop() {
     _alertTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       final standalone = context.read<StandaloneProvider>();
@@ -111,8 +169,9 @@ class _StandalonePageState extends State<StandalonePage> {
   @override
   void dispose() {
     _alertTimer?.cancel();
-    _camera?.dispose();
+    _stopVideo();
     _detector.dispose();
+    context.read<StandaloneProvider>().removeListener(_onProviderChanged);
     super.dispose();
   }
 
@@ -200,19 +259,31 @@ class _StandalonePageState extends State<StandalonePage> {
             ),
           ),
 
-          // Vista de cámara
+          // Vista de cámara (móvil o cámara IP)
           Expanded(
             child: _cameraError
                 ? const Center(
                     child: Text(
-                      "No se pudo acceder a la cámara.\nVerifica los permisos.",
+                      "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos.",
                       style: TextStyle(color: Colors.white),
                       textAlign: TextAlign.center,
                     ),
                   )
-                : _camera == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : CameraPreview(_camera!),
+                : standalone.cameraSource == StandaloneCameraSource.ipCamera
+                    ? (_lastIpFrame == null
+                        ? const Center(
+                            child: CircularProgressIndicator(),
+                          )
+                        : Image.memory(
+                            _lastIpFrame!,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.contain,
+                            gaplessPlayback: true,
+                          ))
+                    : (_camera == null
+                        ? const Center(child: CircularProgressIndicator())
+                        : CameraPreview(_camera!)),
           ),
 
           // Estadísticas

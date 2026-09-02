@@ -13,11 +13,12 @@ class PersonDetector {
   Interpreter? _interpreter;
   bool _loaded = false;
 
-  // Entrada del modelo: 300x300 RGB
+  // Entrada del modelo: 300x300 RGB (uint8 cuantizado)
   static const int _inputSize = 300;
 
-  // El modelo devuelve 4 outputs (SSD MobileNet):
-  // [1, 10, num] boxes, classes, scores, [num] detections
+  // Máximo de detecciones devueltas por el modelo (SSD MobileNet V2 coral).
+  static const int _maxDetections = 20;
+
   late List<List<double>> _boxes;
   late List<List<double>> _classes;
   late List<List<double>> _scores;
@@ -36,12 +37,23 @@ class PersonDetector {
     final options = InterpreterOptions()..threads = 1;
     _interpreter = Interpreter.fromFile(file, options: options);
 
-    _boxes = List.generate(1, (_) => List.filled(10, 0.0));
-    _classes = List.generate(1, (_) => List.filled(10, 0.0));
-    _scores = List.generate(1, (_) => List.filled(10, 0.0));
+    _boxes = List.generate(1, (_) => List.filled(_maxDetections, 0.0));
+    _classes = List.generate(1, (_) => List.filled(_maxDetections, 0.0));
+    _scores = List.generate(1, (_) => List.filled(_maxDetections, 0.0));
     _numDetections = List.filled(1, 0.0);
 
     _loaded = true;
+  }
+
+  /// Detecta personas en un frame JPEG (de cámaras IP MJPEG).
+  Future<int> detectFromJpeg(Uint8List jpeg, {double confidence = 0.5}) async {
+    try {
+      final image = img.decodeImage(jpeg);
+      if (image == null) return 0;
+      return await detectPerson(image!, confidence: confidence);
+    } catch (_) {
+      return 0;
+    }
   }
 
   /// Detecta personas en una imagen RGBA/JPEG.
@@ -52,21 +64,21 @@ class PersonDetector {
     // Redimensionar a la entrada del modelo (300x300, mantener proporción crop).
     final resized = img.copyResize(image, width: _inputSize, height: _inputSize);
 
-    // Normalizar a [0,1] float32.
-    final input = Float32List(1 * _inputSize * _inputSize * 3);
+    // Entrada uint8 cuantizada: valores [0,255] RGB directos.
+    final input = Uint8List(1 * _inputSize * _inputSize * 3);
     var idx = 0;
     for (var y = 0; y < _inputSize; y++) {
       for (var x = 0; x < _inputSize; x++) {
         final p = resized.getPixel(x, y);
-        input[idx++] = p.r.toDouble() / 255.0;
-        input[idx++] = p.g.toDouble() / 255.0;
-        input[idx++] = p.b.toDouble() / 255.0;
+        input[idx++] = p.r.toInt();
+        input[idx++] = p.g.toInt();
+        input[idx++] = p.b.toInt();
       }
     }
 
-    final boxes = List.generate(1, (_) => List<double>.filled(10, 0));
-    final classes = List.generate(1, (_) => List<double>.filled(10, 0));
-    final scores = List.generate(1, (_) => List<double>.filled(10, 0));
+    final boxes = List.generate(1, (_) => List<double>.filled(_maxDetections, 0));
+    final classes = List.generate(1, (_) => List<double>.filled(_maxDetections, 0));
+    final scores = List.generate(1, (_) => List<double>.filled(_maxDetections, 0));
     final detections = List<double>.filled(1, 0);
 
     _interpreter!.runForMultipleInputs(
@@ -81,7 +93,7 @@ class PersonDetector {
 
     var people = 0;
     final num = (detections[0]).round();
-    for (var i = 0; i < num && i < 10; i++) {
+    for (var i = 0; i < num && i < _maxDetections; i++) {
       final cls = classes[0][i].round();
       final score = scores[0][i];
       // COCO: clase 1 = person

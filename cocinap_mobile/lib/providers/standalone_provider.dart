@@ -4,6 +4,14 @@ import 'package:flutter/foundation.dart';
 /// Estado del modo de la app: conectado al PC o funcionando sola (standalone).
 enum AppMode { pc, standalone }
 
+/// Fuente de video del modo independiente.
+enum StandaloneCameraSource {
+  /// Cámara integrada / USB del propio móvil.
+  phone,
+  /// Cámara IP del hogar o de seguridad vía stream HTTP/MJPEG.
+  ipCamera,
+}
+
 /// Resultado de una alerta por cocina desatendida.
 class StandaloneAlert {
   final String message;
@@ -11,10 +19,12 @@ class StandaloneAlert {
   const StandaloneAlert(this.message, this.time);
 }
 
-/// Proveedor del modo standalone: monitoreo con cámara del móvil,
+/// Proveedor del modo standalone: monitoreo con cámara del móvil o cámara IP,
 /// temporizador configurable y alertas si no hay persona en la cocina.
 class StandaloneProvider extends ChangeNotifier {
   AppMode _mode = AppMode.pc;
+  StandaloneCameraSource _cameraSource = StandaloneCameraSource.phone;
+  String _cameraUrl = "";
 
   // --- Timer de monitoreo ---
   int _durationMinutes = 30;
@@ -39,6 +49,8 @@ class StandaloneProvider extends ChangeNotifier {
   bool _alerted = false;
 
   AppMode get mode => _mode;
+  StandaloneCameraSource get cameraSource => _cameraSource;
+  String get cameraUrl => _cameraUrl;
   int get durationMinutes => _durationMinutes;
   int get remainingSeconds => _remainingSeconds;
   bool get timerRunning => _timerRunning;
@@ -51,6 +63,16 @@ class StandaloneProvider extends ChangeNotifier {
   List<StandaloneAlert> get alerts => _alerts;
 
   String get modeLabel => _mode == AppMode.pc ? "Conectado al PC" : "Modo independiente";
+  String get sourceLabel => _cameraSource == StandaloneCameraSource.phone
+      ? "Cámara del móvil"
+      : "Cámara IP";
+
+  String get cameraSourceLabel => switch (_cameraSource) {
+        StandaloneCameraSource.phone =>
+            "Cámara del móvil",
+        StandaloneCameraSource.ipCamera =>
+            "Cámara IP (hogar/seguridad)",
+      };
 
   void setMode(AppMode mode) {
     if (_mode == mode) return;
@@ -58,6 +80,17 @@ class StandaloneProvider extends ChangeNotifier {
     if (mode == AppMode.pc) {
       stopTimer();
     }
+    notifyListeners();
+  }
+
+  void setCameraSource(StandaloneCameraSource source) {
+    if (_cameraSource == source) return;
+    _cameraSource = source;
+    notifyListeners();
+  }
+
+  void setCameraUrl(String url) {
+    _cameraUrl = url.trim();
     notifyListeners();
   }
 
