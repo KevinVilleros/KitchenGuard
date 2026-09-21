@@ -33,8 +33,9 @@ jobs:
         run: |
           flutter build ios --release --no-codesign 2>&1 | tee /tmp/flutter_build.log
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "::error::FLUTTER BUILD FAILED - ultimas 60 lineas:"
-            tail -n 60 /tmp/flutter_build.log | sed 's/^/::error::/'
+            grep -niE "error:|fatal|failed|could not|unable|exception|no such|not found|undefined" /tmp/flutter_build.log | tail -n 12 > /tmp/flutter_errors.txt
+            echo "::error::FLUTTER BUILD FAILED - lineas de error:"
+            sed 's/^/::error::/' /tmp/flutter_errors.txt
             exit 1
           fi
 
