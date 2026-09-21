@@ -11,7 +11,7 @@ on:
 jobs:
   build-unsigned:
     name: Build IPA (unsigned)
-    runs-on: macos-15
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: cocinap_mobile
@@ -48,7 +48,7 @@ jobs:
 
   build-signed:
     name: Build IPA (signed)
-    runs-on: macos-15
+    runs-on: macos-latest
     if: ${{ secrets.IOS_CERTIFICATE != '' && secrets.IOS_CERTIFICATE_PASSWORD != '' && secrets.IOS_PROVISIONING_PROFILE != '' }}
     needs: build-unsigned
     defaults:
