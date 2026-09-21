@@ -1,68 +1,87 @@
-# CocinaP Mobile — App de Monitoreo Remoto
+# CocinaP Mobile — App de Monitoreo de Cocina
 
-App companion para Android que se conecta al servidor CocinaP en la PC.
+App compañera (Android e iOS) para el sistema CocinaP de seguridad en la cocina.
 
 ## Características
 
-- Dashboard en vivo con stream MJPEG de la cámara
+- **Monitoreo independiente** con la cámara del móvil o una cámara IP
+- Detección de personas **on-device** con TFLite (SSD MobileNet V2 / COCO)
+- Alerta local (sonido + vibración) si la cocina queda desatendida
+- Dashboard en vivo con stream MJPEG de la cámara del servidor
 - Estado de detección en tiempo real (fuego, humo, personas)
-- Alarmas push via Server-Sent Events (SSE)
-- Configuración remota de parámetros de detección
-- Auto-descubrimiento del servidor via mDNS
-- Notificaciones push FCM (Firebase) — opcional
-- Foreground service para alarmas en background
-- Conexión automática al iniciar
+- Alarmas en tiempo real vía Server-Sent Events (SSE)
+- Auto-descubrimiento del servidor vía mDNS
+- Conexión por código QR, manual o automática
+- Manual, guía de cámaras y términos en español e inglés
+- Guía de instalación/colocación de cámara en el primer uso
 
 ## Pantallas
 
 | Pantalla | Descripción |
 |---|---|
-| **Discovery** | Auto-descubrimiento mDNS o conexión manual |
-| **Dashboard** | Video en vivo + indicadores de estado |
+| **Monitoreo** | Modo independiente: cámara móvil/IP + detección de personas |
+| **Conectar** | Auto-descubrimiento mDNS, QR o conexión manual |
+| **Cámara** | Video en vivo del servidor + indicadores de estado |
 | **Alarmas** | Historial de alarmas en tiempo real |
-| **Configuración** | Ajuste remoto de parámetros de detección |
-| **Ajustes** | Preferencias de conexión |
+| **Ajustes** | Preferencias, fuente de cámara, monitoreo y ayuda |
 
 ## Stack
 
-- **Framework:** Flutter 3.29+
+- **Framework:** Flutter 3.32+
 - **Estado:** Provider
 - **HTTP:** `http` package
 - **mDNS:** `multicast_dns`
-- **Notificaciones:** Firebase Messaging + flutter_local_notifications
+- **Notificaciones locales:** flutter_local_notifications
+- **Detección:** tflite_flutter (`ssd_mobilenet_v2_coco.tflite`, entrada uint8)
 - **Background:** flutter_background_service
 
-## Compilar
+> **Nota:** se eliminó Firebase (FCM) para permitir compilar sin
+> `google-services.json`. Las notificaciones locales funcionan.
+
+## Compilar Android
 
 ```bash
 cd cocinap_mobile
 flutter pub get
-flutter run                      # debug en dispositivo
-flutter build apk --debug        # APK debug
-flutter build apk --release      # APK release (requiere keystore)
+flutter build apk --release
 ```
+
+APK en `build/app/outputs/flutter-apk/app-release.apk`.
+
+## Compilar iOS (sin Mac local)
+
+Acción de GitHub que compila el `.ipa` en la nube: en `Actions → iOS Build
+CocinaP → Run workflow`. Descarga el artefacto `CocinaP-iOS` e instálalo con
+Sideloadly (ver `docs/INSTALL_IOS_WINDOWS.es.md`).
 
 ## Estructura
 
 ```
 lib/
-├── main.dart                    # Entry point con inicialización
+├── main.dart                    # Entry point, guía de primer uso
+├── content/
+│   └── content.dart             # Manual, guía y términos (ES/EN)
 ├── providers/
 │   ├── server_provider.dart     # Estado de conexión + mDNS
 │   ├── alarms_provider.dart     # Estado de alarmas SSE
-│   └── config_provider.dart     # Estado de configuración remota
+│   ├── config_provider.dart     # Estado de configuración remota
+│   └── standalone_provider.dart # Monitoreo independiente
 ├── services/
 │   ├── api_service.dart         # Llamadas HTTP a API REST
 │   ├── discovery_service.dart   # mDNS discovery
 │   ├── mjpeg_service.dart       # Parser de stream MJPEG
-│   ├── fcm_service.dart         # Firebase Cloud Messaging
-│   ├── background_service.dart  # Foreground service
+│   ├── person_detector.dart     # Detección TFLite on-device
+│   ├── background_service.dart  # Servicio superior (notificaciones)
 │   └── settings_service.dart    # SharedPreferences
 ├── pages/
+│   ├── standalone_page.dart     # Monitoreo independiente
+│   ├── camera_install_guide_page.dart  # Guía de colocación (1er uso)
 │   ├── discovery_page.dart      # Pantalla de conexión
 │   ├── dashboard_page.dart      # Dashboard en vivo
 │   ├── alarms_page.dart         # Historial de alarmas
-│   ├── config_page.dart         # Configuración remota
+│   ├── config_page.dart         # Configuración remota (no navegable)
+│   ├── ip_camera_page.dart      # Fuente de cámara móvil/IP
+│   ├── help_page.dart           # Manual, guía y términos
 │   └── settings_page.dart       # Preferencias
 └── widgets/
     ├── mjpeg_viewer.dart        # Widget MJPEG player
