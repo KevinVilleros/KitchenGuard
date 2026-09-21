@@ -30,7 +30,13 @@ jobs:
         run: flutter pub get
 
       - name: Build iOS app (genera pods y compila)
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter build ios --release --no-codesign 2>&1 | tee /tmp/flutter_build.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "::error::FLUTTER BUILD FAILED - ultimas 60 lineas:"
+            tail -n 60 /tmp/flutter_build.log | sed 's/^/::error::/'
+            exit 1
+          fi
 
       - name: Package unsigned IPA
         run: |
