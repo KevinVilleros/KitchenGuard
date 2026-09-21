@@ -87,3 +87,4 @@ lib/
     ├── mjpeg_viewer.dart        # Widget MJPEG player
     └── status_card.dart         # Card de indicador
 ```
+> Estado de CI: el build iOS se genera via GitHub Actions (workflow \iOS Build CocinaP\). Ver \docs/INSTALL_IOS_WINDOWS.es.md\ para instalarlo con Sideloadly.
