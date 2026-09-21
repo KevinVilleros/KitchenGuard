@@ -49,7 +49,6 @@ jobs:
   build-signed:
     name: Build IPA (signed)
     runs-on: macos-latest
-    if: ${{ secrets.IOS_CERTIFICATE != '' && secrets.IOS_CERTIFICATE_PASSWORD != '' && secrets.IOS_PROVISIONING_PROFILE != '' }}
     needs: build-unsigned
     defaults:
       run:
@@ -61,12 +60,27 @@ jobs:
         with:
           channel: stable
 
+      - name: Comprobar certificado configurado
+        run: |
+          if [ -z "$IOS_CERTIFICATE" ] || [ -z "$IOS_CERTIFICATE_PASSWORD" ] || [ -z "$IOS_PROVISIONING_PROFILE" ]; then
+            echo "::notice::Certificado iOS no configurado. Job saltado (usa un .ipa sin firmar con Sideloadly)."
+            exit 0
+          fi
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+
       - name: Import signing certificate
         env:
           IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
         run: |
+          if [ -z "$IOS_CERTIFICATE" ] || [ -z "$IOS_CERTIFICATE_PASSWORD" ] || [ -z "$IOS_PROVISIONING_PROFILE" ]; then
+            echo "Sin certificado. Omitiendo firma."
+            exit 0
+          fi
           echo "$IOS_CERTIFICATE" | base64 --decode > cert.p12
           echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
 
@@ -89,9 +103,16 @@ jobs:
           cd ..
 
       - name: Build signed IPA
-        run: flutter build ipa --release --export-method ad-hoc
+        run: |
+          if [ ! -f cert.p12 ]; then
+            echo "Sin certificado. Usa el job 'Build IPA (unsigned)'."
+            exit 0
+          fi
+          flutter build ipa --release --export-method ad-hoc
 
-      - uses: actions/upload-artifact@v4
+      - name: Subir IPA firmado (si existe)
+        if: ${{ hashFiles('cocinap_mobile/build/ios/ipa/*.ipa') != '' }}
+        uses: actions/upload-artifact@v4
         with:
           name: CocinaP-iOS-signed
           path: cocinap_mobile/build/ios/ipa/*.ipa
