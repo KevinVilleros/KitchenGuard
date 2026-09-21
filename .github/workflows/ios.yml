@@ -1,5 +1,9 @@
 name: iOS Build CocinaP
 
+# Genera el .ipa para instalar la app en un iPhone.
+# - job "Build IPA (unsigned)": .ipa sin firmar para Sideloadly (recomendado).
+# - job "Build IPA (signed)": requiere secrets de certificado Apple (opcional).
+
 on:
   workflow_dispatch:
   push:
