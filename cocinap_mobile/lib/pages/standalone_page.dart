@@ -96,7 +96,11 @@ class _StandalonePageState extends State<StandalonePage> {
       } catch (_) {
         back = cameras.first;
       }
-      final controller = CameraController(back, ResolutionPreset.medium);
+      final controller = CameraController(
+        back,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
       await controller.initialize();
       if (!mounted) return;
       setState(() => _cameraError = false);
