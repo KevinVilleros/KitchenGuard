@@ -58,14 +58,14 @@ Sideloadly (ver `docs/INSTALL_IOS_WINDOWS.es.md`).
 
 ```
 lib/
-├── main.dart                    # Entry point, guía de primer uso
+├── main.dart                    # Entry point, navegación, primer uso y tour
 ├── content/
-│   └── content.dart             # Manual, guía y términos (ES/EN)
+│   └── content.dart             # Manual, guía, objetivos e info (ES/EN)
 ├── providers/
 │   ├── server_provider.dart     # Estado de conexión + mDNS
 │   ├── alarms_provider.dart     # Estado de alarmas SSE
-│   ├── config_provider.dart     # Estado de configuración remota
-│   └── standalone_provider.dart # Monitoreo independiente
+│   ├── standalone_provider.dart # Monitoreo independiente
+│   └── tour_controller.dart     # Estado del tour guiado de la interfaz
 ├── services/
 │   ├── api_service.dart         # Llamadas HTTP a API REST
 │   ├── discovery_service.dart   # mDNS discovery
@@ -74,16 +74,19 @@ lib/
 │   ├── background_service.dart  # Servicio superior (notificaciones)
 │   └── settings_service.dart    # SharedPreferences
 ├── pages/
+│   ├── home_page.dart           # Inicio: dashboard gráfico y objetivos
+│   ├── onboarding_page.dart     # Onboarding de primer uso + interfaz
 │   ├── standalone_page.dart     # Monitoreo independiente
-│   ├── camera_install_guide_page.dart  # Guía de colocación (1er uso)
+│   ├── camera_install_guide_page.dart  # Guía de colocación de cámara
 │   ├── discovery_page.dart      # Pantalla de conexión
-│   ├── dashboard_page.dart      # Dashboard en vivo
+│   ├── dashboard_page.dart      # Cámara del PC en vivo
 │   ├── alarms_page.dart         # Historial de alarmas
-│   ├── config_page.dart         # Configuración remota (no navegable)
 │   ├── ip_camera_page.dart      # Fuente de cámara móvil/IP
 │   ├── help_page.dart           # Manual, guía y términos
 │   └── settings_page.dart       # Preferencias
 └── widgets/
+    ├── graphical.dart           # Anillos, tarjetas y timeline gráficos
+    ├── tour_overlay.dart        # Coach marks del tour de interfaz
     ├── mjpeg_viewer.dart        # Widget MJPEG player
     └── status_card.dart         # Card de indicador
 ```

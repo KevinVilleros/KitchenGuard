@@ -69,7 +69,7 @@ class AlarmsProvider extends ChangeNotifier {
     final type = alarm["type"] as String? ?? "unknown";
     final msg = alarm["message"] as String? ?? type;
     BackgroundServiceManager.showAlarm(msg);
-    BackgroundServiceManager.updateStatus("⚠️ $type");
+    BackgroundServiceManager.updateStatus("Alarma: $type");
   }
 
   void disconnect() {

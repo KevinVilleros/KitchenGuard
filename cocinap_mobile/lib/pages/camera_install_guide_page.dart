@@ -25,8 +25,12 @@ class _CameraInstallGuidePageState extends State<CameraInstallGuidePage> {
   Future<void> _finish() async {
     final settings = SettingsService();
     await settings.setHasSeenInstallGuide(true);
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/main');
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      navigator.pushReplacementNamed('/main');
     }
   }
 
@@ -84,9 +88,7 @@ class _CameraInstallGuidePageState extends State<CameraInstallGuidePage> {
                   onPressed: _finish,
                   icon: const Icon(Icons.check),
                   label: Text(
-                    lang == "en"
-                        ? "I understand, let's get started"
-                        : "Entendido, comenzar",
+                    lang == "en" ? "Got it" : "Entendido",
                   ),
                 ),
               ),

@@ -37,28 +37,6 @@ class ApiService {
     return json.decode(r.body);
   }
 
-  Future<Map<String, dynamic>> getConfig() async {
-    final r = await http.get(
-      Uri.parse("$_baseUrl/api/config"),
-      headers: _getHeaders,
-    ).timeout(const Duration(seconds: 3));
-    if (r.statusCode != 200) {
-      throw Exception("Config no disponible (${r.statusCode})");
-    }
-    return json.decode(r.body);
-  }
-
-  Future<bool> updateConfig(Map<String, dynamic> updates) async {
-    final r = await http.post(
-      Uri.parse("$_baseUrl/api/config"),
-      headers: _authHeaders,
-      body: json.encode(updates),
-    ).timeout(const Duration(seconds: 5));
-    if (r.statusCode != 200) return false;
-    final data = json.decode(r.body);
-    return data["ok"] == true;
-  }
-
   Future<Map<String, dynamic>> getInfo() async {
     final r = await http.get(
       Uri.parse("$_baseUrl/api/info"),

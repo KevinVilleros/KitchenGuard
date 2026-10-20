@@ -44,8 +44,4 @@ class DiscoveryService {
     }
     return results;
   }
-
-  void dispose() {
-    _client.stop();
-  }
 }

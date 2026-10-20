@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/server_provider.dart';
 import '../providers/standalone_provider.dart';
+import '../providers/tour_controller.dart';
 import '../services/settings_service.dart';
 import '../content/content.dart';
 import 'ip_camera_page.dart';
@@ -42,6 +43,32 @@ class _SettingsPageState extends State<SettingsPage> {
         ? StandaloneCameraSource.ipCamera
         : StandaloneCameraSource.phone);
     standalone.setCameraUrl(await settings.getStandaloneCameraUrl());
+  }
+
+  Future<void> _pickLanguage(BuildContext context) async {
+    final current = AppLocal.language;
+    final settings = context.read<SettingsService>();
+    final sel = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text("Idioma / Language"),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, "es"),
+            child: const Text("Español"),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, "en"),
+            child: const Text("English"),
+          ),
+        ],
+      ),
+    );
+    if (sel != null && sel != current) {
+      AppLocal.setLanguage(sel);
+      await settings.setLanguage(sel);
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -176,8 +203,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const Divider(),
           ListTile(
-            title: const Text("Notificaciones push"),
-            subtitle: const Text("FCM configurado en el servidor"),
+            leading: const Icon(Icons.notifications_active),
+            title: const Text("Notificaciones"),
+            subtitle: const Text("Avisos locales con sonido y vibración"),
           ),
           const Divider(),
           const Padding(
@@ -191,6 +219,26 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: Icon(Icons.smartphone),
             title: Text("En el móvil (TFLite)"),
             subtitle: Text("El modelo se ejecuta en el dispositivo, sin necesidad de PC"),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.translate),
+            title: const Text("Idioma / Language"),
+            subtitle: Text(AppLocal.language == "en" ? "English" : "Español"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _pickLanguage(context),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.school_outlined),
+            title: Text(AppLocal.language == "en"
+                ? "Interface tour"
+                : "Tour de la interfaz"),
+            subtitle: Text(AppLocal.language == "en"
+                ? "Review tabs and main options again"
+                : "Repasa las pestañas y opciones principales"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.read<TourController>().start(),
           ),
           const Divider(),
           ListTile(

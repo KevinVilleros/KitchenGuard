@@ -20,6 +20,16 @@ class BackgroundServiceManager {
       const InitializationSettings(android: androidSettings, iOS: iosSettings),
     );
 
+    // Solicitar permiso de notificaciones (Android 13+ / iOS).
+    await _notif
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+    await _notif
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
+
     // Foreground service channel (low importance, no sound)
     await _notif
         .resolvePlatformSpecificImplementation<
@@ -99,11 +109,6 @@ class BackgroundServiceManager {
       alert,
       const NotificationDetails(android: androidDetails, iOS: iosDetails),
     );
-  }
-
-  static Future<void> stop() async {
-    final service = FlutterBackgroundService();
-    service.invoke('stopService');
   }
 }
 

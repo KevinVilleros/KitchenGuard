@@ -1,11 +1,21 @@
-name: Python CI
+name: Python CI (yolo backend)
 
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'yolo/**'
+      - '.github/workflows/python-ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'yolo/**'
+      - '.github/workflows/python-ci.yml'
   workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: yolo
 
 jobs:
   lint:

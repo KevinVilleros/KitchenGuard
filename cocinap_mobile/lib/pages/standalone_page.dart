@@ -9,6 +9,9 @@ import '../providers/server_provider.dart';
 import '../services/background_service.dart';
 import '../services/person_detector.dart';
 import '../services/mjpeg_service.dart';
+import '../services/settings_service.dart';
+import 'ip_camera_page.dart';
+import 'dashboard_page.dart';
 
 /// Página del modo independiente: monitorea la cocina en el móvil (con la
 /// cámara del dispositivo o una cámara IP) usando un temporizador configurable.
@@ -31,7 +34,6 @@ class _StandalonePageState extends State<StandalonePage> {
   Uint8List? _lastIpFrame;
   StandaloneCameraSource _lastSource = StandaloneCameraSource.phone;
   String _lastUrl = "";
-  bool _initStarted = false;
 
   @override
   void initState() {
@@ -115,17 +117,19 @@ class _StandalonePageState extends State<StandalonePage> {
   /// Consume un stream MJPEG de una cámara IP y lo envía al detector.
   void _startIpStream(String url) {
     _lastIpFrame = null;
+    final standalone = context.read<StandaloneProvider>();
     _ipStreamSub = _mjpeg.start(url).listen((frame) async {
       if (mounted) setState(() => _lastIpFrame = frame);
       if (_detectorLoading || !_detector.loaded) return;
       final count = await _detector.detectFromJpeg(frame,
-          confidence: context.read<StandaloneProvider>().confidence);
-      context.read<StandaloneProvider>().onPersonDetected(count);
+          confidence: standalone.confidence);
+      standalone.onPersonDetected(count);
     });
   }
 
   /// Stream de frames de la cámara del móvil → detección de personas.
   void _startPhoneStream() {
+    final standalone = context.read<StandaloneProvider>();
     _camera!.startImageStream((cameraImage) async {
       if (_detectorLoading || !_detector.loaded) return;
 
@@ -143,8 +147,8 @@ class _StandalonePageState extends State<StandalonePage> {
         );
 
         final count = await _detector.detectPerson(gray,
-            confidence: context.read<StandaloneProvider>().confidence);
-        context.read<StandaloneProvider>().onPersonDetected(count);
+            confidence: standalone.confidence);
+        standalone.onPersonDetected(count);
       } catch (_) {}
     });
   }
@@ -162,10 +166,13 @@ class _StandalonePageState extends State<StandalonePage> {
     _alertTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       final standalone = context.read<StandaloneProvider>();
       if (standalone.shouldAlert()) {
+        final absence = standalone.absenceSeconds;
         standalone.triggerAlert(
-          "Cocina desatendida durante ${standalone.noPersonAlertSeconds}s",
+          "Sin detectar persona en la cocina por ${absence}s",
         );
-        BackgroundServiceManager.showAlarm("Cocina desatendida - revise la cocina");
+        BackgroundServiceManager.showAlarm(
+          "Cocina desatendida: sin persona por ${absence}s. Revise la cocina.",
+        );
       }
     });
   }
@@ -225,15 +232,22 @@ class _StandalonePageState extends State<StandalonePage> {
   @override
   Widget build(BuildContext context) {
     final standalone = context.watch<StandaloneProvider>();
-    final server = context.watch<ServerProvider>();
-    final isConnected = server.status == ConnectionStatus.connected;
 
     final color = standalone.personPresent
         ? Colors.green
         : (standalone.timerRunning ? Colors.orange : Colors.grey);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Modo independiente")),
+      appBar: AppBar(
+        title: const Text("Modo independiente"),
+        actions: [
+          IconButton(
+            tooltip: "Cambiar dispositivo o cámara",
+            icon: const Icon(Icons.devices),
+            onPressed: () => _showDevicesSheet(context),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // Banner de estado
@@ -265,52 +279,81 @@ class _StandalonePageState extends State<StandalonePage> {
 
           // Vista de cámara (móvil o cámara IP)
           Expanded(
-            child: _cameraError
-                ? const Center(
-                    child: Text(
-                      "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos.",
-                      style: TextStyle(color: Colors.white),
-                      textAlign: TextAlign.center,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _cameraError
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text(
+                            "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos.",
+                            style: TextStyle(color: Colors.white),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    : standalone.cameraSource == StandaloneCameraSource.ipCamera
+                        ? (_lastIpFrame == null
+                            ? const Center(
+                                child: CircularProgressIndicator(),
+                              )
+                            : Image.memory(
+                                _lastIpFrame!,
+                                width: double.infinity,
+                                height: double.infinity,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                              ))
+                        : (_camera == null
+                            ? const Center(child: CircularProgressIndicator())
+                            : CameraPreview(_camera!)),
+                if (!_cameraError)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: _LiveBadge(
+                      active: standalone.cameraActive,
+                      personPresent: standalone.personPresent,
                     ),
-                  )
-                : standalone.cameraSource == StandaloneCameraSource.ipCamera
-                    ? (_lastIpFrame == null
-                        ? const Center(
-                            child: CircularProgressIndicator(),
-                          )
-                        : Image.memory(
-                            _lastIpFrame!,
-                            width: double.infinity,
-                            height: double.infinity,
-                            fit: BoxFit.contain,
-                            gaplessPlayback: true,
-                          ))
-                    : (_camera == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : CameraPreview(_camera!)),
+                  ),
+              ],
+            ),
           ),
 
           // Estadísticas
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _StatTile(
-                  icon: Icons.timer,
-                  label: standalone.timerRunning ? "Tiempo restante" : "Temporizador",
-                  value: standalone.timerRunning
-                      ? standalone.remainingLabel
-                      : "${standalone.durationMinutes} min",
-                  color: Colors.orange,
-                ),
-                _StatTile(
-                  icon: Icons.person,
-                  label: "Persona en cocina",
-                  value: standalone.personPresent ? "SÍ" : "NO",
-                  color: color,
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _StatTile(
+                    icon: Icons.timer,
+                    label: standalone.timerRunning ? "Tiempo restante" : "Temporizador",
+                    value: standalone.timerRunning
+                        ? standalone.remainingLabel
+                        : "${standalone.durationMinutes} min",
+                    color: Colors.orange,
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: Colors.white12,
+                  ),
+                  _StatTile(
+                    icon: Icons.person,
+                    label: "Persona en cocina",
+                    value: standalone.personPresent ? "SÍ" : "NO",
+                    color: color,
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -350,15 +393,83 @@ class _StandalonePageState extends State<StandalonePage> {
             ),
           ),
 
+          // Acceso a cambiar de dispositivo/cámara
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showDevicesSheet(context),
+                icon: const Icon(Icons.devices, size: 18),
+                label: const Text("Cambiar dispositivo o cámara"),
+              ),
+            ),
+          ),
+
           // Aviso de modo
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Text(
-              isConnected
-                  ? "También estás conectado al PC · Elige modo en Ajustes"
-                  : "Funcionando solo con la cámara del móvil",
+              standalone.cameraSource == StandaloneCameraSource.ipCamera
+                  ? "Usando cámara IP · ${standalone.cameraSourceLabel}"
+                  : "Usando cámara del móvil",
               style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
               textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Muestra la hoja inferior con los dispositivos/cámaras disponibles,
+  /// permite cambiar de fuente y explica las formas de conectar la app.
+  void _showDevicesSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => const _DevicesSheet(),
+    );
+  }
+}
+
+class _LiveBadge extends StatelessWidget {
+  final bool active;
+  final bool personPresent;
+  const _LiveBadge({required this.active, required this.personPresent});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = !active
+        ? Colors.grey
+        : (personPresent ? Colors.greenAccent : Colors.orangeAccent);
+    final label = !active
+        ? "SIN SEÑAL"
+        : (personPresent ? "EN VIVO" : "SIN PERSONA");
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -388,6 +499,306 @@ class _StatTile extends StatelessWidget {
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
       ],
+    );
+  }
+}
+
+/// Hoja inferior que lista los dispositivos/cámaras disponibles, permite
+/// cambiar de fuente de video y muestra un tutorial breve de las formas de
+/// conectar la app a una cámara.
+class _DevicesSheet extends StatelessWidget {
+  const _DevicesSheet();
+
+  Future<void> _select(BuildContext context, StandaloneCameraSource source) async {
+    final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    standalone.setCameraSource(source);
+    await settings.setStandaloneSourceIndex(
+      source == StandaloneCameraSource.ipCamera ? 1 : 0,
+    );
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final standalone = context.watch<StandaloneProvider>();
+    final server = context.watch<ServerProvider>();
+    final connected = server.status == ConnectionStatus.connected;
+    final scheme = Theme.of(context).colorScheme;
+    final isPhone = standalone.cameraSource == StandaloneCameraSource.phone;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Dispositivos y cámaras",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Elige desde dónde monitorear tu cocina",
+                style: TextStyle(fontSize: 13, color: Colors.white60),
+              ),
+              const SizedBox(height: 12),
+
+              // Cámara del móvil
+              _DeviceTile(
+                icon: Icons.smartphone,
+                title: "Cámara del móvil",
+                subtitle: "Usa la cámara trasera de este teléfono",
+                selected: isPhone,
+                onTap: () => _select(context, StandaloneCameraSource.phone),
+              ),
+
+              // Cámara IP
+              _DeviceTile(
+                icon: Icons.videocam,
+                title: "Cámara IP (hogar / seguridad)",
+                subtitle: standalone.cameraUrl.isNotEmpty
+                    ? standalone.cameraUrl
+                    : "Aún no has configurado una URL",
+                selected: !isPhone,
+                onTap: () async {
+                  Navigator.pop(context);
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const IpCameraPage()),
+                  );
+                },
+                trailing: TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const IpCameraPage()),
+                    );
+                  },
+                  child: const Text("Configurar"),
+                ),
+              ),
+
+              // PC conectado (opcional)
+              _DeviceTile(
+                icon: Icons.computer,
+                title: "PC con CocinaP",
+                subtitle: connected
+                    ? server.serverUrl.replaceAll("http://", "")
+                    : "No conectado · Escanea el QR del PC",
+                selected: false,
+                enabled: connected,
+                onTap: connected
+                    ? () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const DashboardPage()),
+                        );
+                      }
+                    : () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Conecta el PC desde la pestaña Conectar",
+                            ),
+                          ),
+                        );
+                      },
+              ),
+
+              const SizedBox(height: 20),
+              Text(
+                "Cómo conectar la app a una cámara",
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: scheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              const _HowToRow(
+                number: 1,
+                icon: Icons.smartphone,
+                title: "Cámara del móvil (sin equipos)",
+                body: "Coloca el teléfono apuntando a la estufa. Es la forma "
+                    "más rápida: no necesitas nada más.",
+              ),
+              const _HowToRow(
+                number: 2,
+                icon: Icons.videocam,
+                title: "Cámara IP por URL MJPEG",
+                body: "Toca 'Cámara IP → Configurar' y pega la URL HTTP/MJPEG "
+                    "de tu cámara (http://usuario:pass@IP/stream).",
+              ),
+              const _HowToRow(
+                number: 3,
+                icon: Icons.qr_code_scanner,
+                title: "PC con CocinaP (opcional)",
+                body: "En la pestaña 'Conectar' escanea el QR del PC para ver "
+                    "su cámara y recibir también alarmas de fuego y humo.",
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.school, size: 18, color: scheme.primary),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        "Puedes cambiar de fuente cuando quieras; el cambio se "
+                        "aplica al instante en el monitoreo.",
+                        style: TextStyle(fontSize: 12.5, color: Colors.white70),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeviceTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+  final Widget? trailing;
+  const _DeviceTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+    this.enabled = true,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final borderColor = selected
+        ? scheme.primary
+        : Colors.white.withValues(alpha: 0.1);
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.1)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
+        ),
+        child: ListTile(
+          onTap: onTap,
+          leading: Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: scheme.primary, size: 20),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          subtitle: Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12.5),
+          ),
+          trailing: trailing ??
+              (selected
+                  ? Icon(Icons.check_circle, color: scheme.primary)
+                  : const Icon(Icons.chevron_right)),
+        ),
+      ),
+    );
+  }
+}
+
+class _HowToRow extends StatelessWidget {
+  final int number;
+  final IconData icon;
+  final String title;
+  final String body;
+  const _HowToRow({
+    required this.number,
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 15,
+            backgroundColor: scheme.primary,
+            child: Text(
+              "$number",
+              style: TextStyle(
+                color: scheme.onPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 15, color: scheme.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  body,
+                  style: const TextStyle(fontSize: 12.5, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

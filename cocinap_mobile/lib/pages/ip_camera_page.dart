@@ -69,19 +69,23 @@ class _IpCameraPageState extends State<IpCameraPage> {
             style: TextStyle(fontSize: 14),
           ),
           const SizedBox(height: 16),
-          RadioListTile<bool>(
-            title: const Text("Cámara del móvil"),
-            subtitle: const Text("Usa la cámara del dispositivo"),
-            value: false,
-            groupValue: _useIp,
-            onChanged: (v) => setState(() => _useIp = v == false),
-          ),
-          RadioListTile<bool>(
-            title: const Text("Cámara IP (hogar / seguridad)"),
-            subtitle: const Text("Conéctate a una cámara de red"),
-            value: true,
+          RadioGroup<bool>(
             groupValue: _useIp,
             onChanged: (v) => setState(() => _useIp = v == true),
+            child: const Column(
+              children: [
+                RadioListTile<bool>(
+                  title: Text("Cámara del móvil"),
+                  subtitle: Text("Usa la cámara del dispositivo"),
+                  value: false,
+                ),
+                RadioListTile<bool>(
+                  title: Text("Cámara IP (hogar / seguridad)"),
+                  subtitle: Text("Conéctate a una cámara de red"),
+                  value: true,
+                ),
+              ],
+            ),
           ),
           if (_useIp) ...[
             const SizedBox(height: 16),

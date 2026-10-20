@@ -12,7 +12,19 @@ class SettingsService {
   static const _keyStandaloneSource = 'standalone_source';
   static const _keyStandaloneCameraUrl = 'standalone_camera_url';
   static const _keyHasSeenInstallGuide = 'has_seen_install_guide';
+  static const _keyHasSeenAppTour = 'has_seen_app_tour';
+  static const _keyLanguage = 'app_language';
   static const _maxRecents = 5;
+
+  Future<String> getLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLanguage) ?? 'es';
+  }
+
+  Future<void> setLanguage(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLanguage, lang == 'en' ? 'en' : 'es');
+  }
 
   Future<String?> getServerUrl() async {
     final prefs = await SharedPreferences.getInstance();
@@ -97,6 +109,16 @@ class SettingsService {
   Future<void> setHasSeenInstallGuide(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyHasSeenInstallGuide, value);
+  }
+
+  Future<bool> getHasSeenAppTour() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyHasSeenAppTour) ?? false;
+  }
+
+  Future<void> setHasSeenAppTour(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyHasSeenAppTour, value);
   }
 
   Future<void> setServerUrl(String url) async {

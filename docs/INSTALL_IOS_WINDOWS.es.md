@@ -22,12 +22,12 @@ gratis para hacerlo.
 1. Entra en tu repositorio de GitHub:
    `https://github.com/KevinVilleros/KitchenGuard`
 2. Ve a la pestaña **Actions**.
-3. En el menú lateral elige el workflow **"Build iOS IPA"**.
-4. Pulsa el botón **"Run workflow"** (usa la rama `main`) y **"Run workflow"** de nuevo.
+3. En el menú lateral elige el workflow **"iOS Build CocinaP"**.
+4. Pulsa el botón **"Run workflow"** (rama `main`) y **"Run workflow"** de nuevo.
    (También se ejecuta solo cada vez que haces push de la app.)
-5. Espera a que el job quede **en verde** (unos 10-20 minutos la primera vez).
-6. Pincha sobre el job terminado y baja hasta la sección **"Artifacts"**.
-7. Descarga el archivo **`cocinap-ios`** → dentro está **`cocinap_mobile.ipa`**.
+5. Espera a que el run quede **en verde** (unos 5-10 minutos).
+6. Pincha sobre el run terminado y baja hasta la sección **"Artifacts"**.
+7. Descarga el archivo **`CocinaP-iOS`** → el ZIP contiene **`CocinaP-unsigned.ipa`**.
 8. Descomprímelo en una carpeta (p. ej. `C:\Users\tu\Desktop\cocinap`).
 
 ---
@@ -54,7 +54,7 @@ gratis para hacerlo.
 
 1. En Sideloadly, selecciona tu iPhone en el menú superior si hay varios
    dispositivos (normalmente se detecta solo).
-2. Arrastra el archivo **`cocinap_mobile.ipa`** a la ventana de Sideloadly.
+2. Arrastra el archivo **`CocinaP-unsigned.ipa`** a la ventana de Sideloadly.
 3. Escribe tu **Apple ID** y **contraseña** en los campos *Apple ID* y *Password*.
    (Solo se usa para firmar la app en ese momento; Sideloadly puede guardarla
    en tu PC de forma opcional.)

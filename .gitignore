@@ -1,8 +1,9 @@
 # ─── Modelos ──────────────────────────────────
-models/*.pt
+yolo/models/*.pt
 
 # ─── Videos de prueba ────────────────────────
 data/videos/*.mp4
+yolo/data/videos/*.mp4
 
 # ─── Python ───────────────────────────────────
 __pycache__/
@@ -29,6 +30,7 @@ logs/
 # ─── IDE ──────────────────────────────────────
 .vscode/
 .idea/
+*.iml
 *.sublime-*
 
 # ─── OS ───────────────────────────────────────

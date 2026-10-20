@@ -117,20 +117,6 @@ class ServerProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> discover() async {
-    _status = ConnectionStatus.connecting;
-    notifyListeners();
-    final servers = await discovery.discover();
-    _foundServers = servers;
-    if (servers.isNotEmpty) {
-      await connectTo(servers.first.url);
-    } else {
-      _status = ConnectionStatus.error;
-      _errorMessage = "No se encontró servidor CocinaP en la red";
-      notifyListeners();
-    }
-  }
-
   Future<void> connect() async {
     _status = ConnectionStatus.connecting;
     notifyListeners();

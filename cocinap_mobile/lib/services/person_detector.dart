@@ -19,11 +19,6 @@ class PersonDetector {
   // Máximo de detecciones devueltas por el modelo (SSD MobileNet V2 coral).
   static const int _maxDetections = 20;
 
-  late List<List<double>> _boxes;
-  late List<List<double>> _classes;
-  late List<List<double>> _scores;
-  late List<double> _numDetections;
-
   /// Carga el .tflite desde assets a una ubicación temporal.
   Future<void> load(String assetPath) async {
     if (_loaded) return;
@@ -37,11 +32,6 @@ class PersonDetector {
     final options = InterpreterOptions()..threads = 1;
     _interpreter = Interpreter.fromFile(file, options: options);
 
-    _boxes = List.generate(1, (_) => List.filled(_maxDetections, 0.0));
-    _classes = List.generate(1, (_) => List.filled(_maxDetections, 0.0));
-    _scores = List.generate(1, (_) => List.filled(_maxDetections, 0.0));
-    _numDetections = List.filled(1, 0.0);
-
     _loaded = true;
   }
 
@@ -50,7 +40,7 @@ class PersonDetector {
     try {
       final image = img.decodeImage(jpeg);
       if (image == null) return 0;
-      return await detectPerson(image!, confidence: confidence);
+      return await detectPerson(image, confidence: confidence);
     } catch (_) {
       return 0;
     }

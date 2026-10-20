@@ -6,14 +6,16 @@ import 'services/settings_service.dart';
 import 'services/background_service.dart';
 import 'providers/server_provider.dart';
 import 'providers/alarms_provider.dart';
-import 'providers/config_provider.dart';
 import 'providers/standalone_provider.dart';
+import 'providers/tour_controller.dart';
 import 'pages/discovery_page.dart';
-import 'pages/dashboard_page.dart';
 import 'pages/alarms_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/standalone_page.dart';
-import 'pages/camera_install_guide_page.dart';
+import 'pages/onboarding_page.dart';
+import 'pages/home_page.dart';
+import 'widgets/tour_overlay.dart';
+import 'content/content.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,8 @@ void main() async {
   final discovery = DiscoveryService();
   final settings = SettingsService();
   final standalone = StandaloneProvider();
+
+  AppLocal.setLanguage(await settings.getLanguage());
 
   try {
     await BackgroundServiceManager.init();
@@ -32,8 +36,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => ServerProvider(api, discovery, settings)),
         ChangeNotifierProvider(create: (_) => AlarmsProvider(api)),
-        ChangeNotifierProvider(create: (_) => ConfigProvider(api)),
         ChangeNotifierProvider(create: (_) => standalone),
+        ChangeNotifierProvider(create: (_) => TourController()),
         Provider.value(value: settings),
         Provider.value(value: api),
       ],
@@ -67,20 +71,50 @@ class _CocinaPAppState extends State<CocinaPApp> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: Colors.orange,
+      brightness: Brightness.dark,
+    );
     return MaterialApp(
       title: "CocinaP",
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: Colors.orange,
+        colorScheme: scheme,
         useMaterial3: true,
         brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF120D0B),
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF1E1714),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: const Color(0xFF1E1714),
+          indicatorColor: scheme.primary.withValues(alpha: 0.22),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        ),
       ),
       routes: {
         '/main': (context) => const MainShell(),
       },
       home: _showInstallGuide == null
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : (_showInstallGuide! ? const CameraInstallGuidePage() : const MainShell()),
+          : (_showInstallGuide! ? const OnboardingPage() : const MainShell()),
     );
   }
 }
@@ -93,64 +127,120 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _currentIndex = 0;
-  bool _wasConnected = false;
+  static const int _destinationCount = 5;
 
-  final _pages = const [
-    StandalonePage(),
-    DiscoveryPage(),
-    DashboardPage(),
-    AlarmsPage(),
-    SettingsPage(),
-  ];
+  int _currentIndex = 0;
+  final GlobalKey _navKey = GlobalKey();
+  TourController? _tour;
+  bool _tourWasActive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final seen = await SettingsService().getHasSeenAppTour();
+      if (!mounted || seen) return;
+      context.read<TourController>().start();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final tour = context.read<TourController>();
+    if (_tour != tour) {
+      _tour?.removeListener(_onTourChanged);
+      _tour = tour;
+      tour.addListener(_onTourChanged);
+    }
+  }
+
+  void _onTourChanged() {
+    final tour = _tour;
+    if (tour == null || !mounted) return;
+    if (tour.active) {
+      final tab = tour.highlightedTab;
+      if (tab != null && tab != _currentIndex) {
+        setState(() => _currentIndex = tab);
+      } else {
+        setState(() {});
+      }
+    } else {
+      setState(() {});
+    }
+    if (_tourWasActive && !tour.active) {
+      SettingsService().setHasSeenAppTour(true);
+    }
+    _tourWasActive = tour.active;
+  }
+
+  @override
+  void dispose() {
+    _tour?.removeListener(_onTourChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final tour = context.watch<TourController>();
     final server = context.watch<ServerProvider>();
     final standalone = context.watch<StandaloneProvider>();
     final isConnected = server.status == ConnectionStatus.connected;
+    final lang = AppLocal.language;
 
-    // When connection succeeds, jump to camera.
-    if (isConnected && !_wasConnected) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && isConnected && _currentIndex == 1) {
-          setState(() => _currentIndex = 2);
-        }
-      });
-    }
-    _wasConnected = isConnected;
+    final pages = [
+      HomePage(onOpenTab: (i) => setState(() => _currentIndex = i)),
+      const StandalonePage(),
+      const DiscoveryPage(),
+      const AlarmsPage(),
+      const SettingsPage(),
+    ];
 
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        destinations: [
-          NavigationDestination(
-            icon: Icon(Icons.phone_android, color: standalone.timerRunning ? Colors.orange : null),
-            label: "Monitoreo",
+    return Stack(
+      children: [
+        Scaffold(
+          body: IndexedStack(index: _currentIndex, children: pages),
+          bottomNavigationBar: NavigationBar(
+            key: _navKey,
+            height: 62,
+            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (i) => setState(() => _currentIndex = i),
+            destinations: [
+              NavigationDestination(
+                icon: const Icon(Icons.home_outlined),
+                selectedIcon: const Icon(Icons.home),
+                label: NavLabels.home(lang),
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.phone_android,
+                    color: standalone.timerRunning ? Colors.orange : null),
+                label: NavLabels.monitoring(lang),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.qr_code_scanner),
+                label: NavLabels.connect(lang),
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.warning_amber,
+                    color: isConnected ? Colors.orange : null),
+                label: NavLabels.alarms(lang),
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.tune),
+                label: NavLabels.settings(lang),
+              ),
+            ],
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.search),
-            label: "Conectar",
+        ),
+        if (tour.active)
+          TourOverlay(
+            tour: tour,
+            navKey: _navKey,
+            destinationCount: _destinationCount,
+            lang: lang,
           ),
-          NavigationDestination(
-            icon: Icon(Icons.videocam, color: isConnected ? Colors.green : null),
-            label: "Cámara",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.warning_amber, color: isConnected ? Colors.orange : null),
-            label: "Alarmas",
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.tune),
-            label: "Ajustes",
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../content/content.dart';
+import '../services/settings_service.dart';
+import 'camera_install_guide_page.dart';
 
 /// Contenido interno de la app: manual de uso, guía de cámaras y
 /// términos y condiciones. Disponible en español e inglés.
@@ -12,7 +14,6 @@ class HelpPage extends StatefulWidget {
 
 class _HelpPageState extends State<HelpPage> {
   int _section = 0; // 0=Manual, 1=Guía, 2=Términos
-  bool _accepted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -46,9 +47,7 @@ class _HelpPageState extends State<HelpPage> {
                 ? _ManualView()
                 : _section == 1
                     ? _CameraGuideView()
-                    : _TermsView(
-                        onAccept: () => setState(() => _accepted = true),
-                      ),
+                    : _TermsView(onAccept: () {}),
           ),
         ],
       ),
@@ -75,6 +74,7 @@ class _HelpPageState extends State<HelpPage> {
     );
     if (sel != null && mounted && sel != current) {
       AppLocal.setLanguage(sel);
+      await SettingsService().setLanguage(sel);
       setState(() {});
     }
   }
@@ -126,6 +126,21 @@ class _CameraGuideView extends StatelessWidget {
               _BodyBlock(steps[i + 1]),
             const SizedBox(height: 12),
           ],
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CameraInstallGuidePage(),
+              ),
+            ),
+            icon: const Icon(Icons.place),
+            label: Text(
+              AppLocal.language == "en"
+                  ? "Camera placement guide"
+                  : "Guía de colocación de la cámara",
+            ),
+          ),
         ],
       ),
     );
