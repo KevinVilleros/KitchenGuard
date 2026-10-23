@@ -53,7 +53,18 @@ class _CocinaPAppState extends State<CocinaPApp> {
 
   Future<void> _loadInstallGuideFlag() async {
     final settings = SettingsService();
-    final seen = await settings.getHasSeenInstallGuide();
+    var seen = await settings.getHasSeenOnboarding();
+
+    // Migración: instalaciones que ya completaron la guía anterior no deben
+    // volver a ver una introducción nueva después de actualizar.
+    if (!seen) {
+      final legacySeen = await settings.getHasSeenInstallGuide();
+      if (legacySeen) {
+        await settings.setHasSeenOnboarding(true);
+        seen = true;
+      }
+    }
+
     if (!mounted) return;
     setState(() => _showInstallGuide = !seen);
   }
@@ -149,7 +160,7 @@ class _MainShellState extends State<MainShell> {
     if (tour == null || !mounted) return;
     if (tour.active) {
       final tab = tour.highlightedTab;
-      if (tab != null && tab != _currentIndex) {
+      if (tab != null && tab < _destinationCount && tab != _currentIndex) {
         setState(() => _currentIndex = tab);
       } else {
         setState(() {});

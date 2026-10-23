@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -12,6 +13,14 @@ const _notifId = 888;
 final FlutterLocalNotificationsPlugin _notif = FlutterLocalNotificationsPlugin();
 
 class BackgroundServiceManager {
+  static Future<bool> get notificationsEnabled async {
+    final result = await _notif
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.areNotificationsEnabled();
+    return result ?? true;
+  }
+
   static Future<void> init() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
@@ -76,18 +85,53 @@ class BackgroundServiceManager {
       ),
     );
 
-    service.startService();
+  }
+
+  static Future<void> startMonitoring(int remainingSeconds) async {
+    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
+    final service = FlutterBackgroundService();
+    final running = await service.isRunning();
+    if (!running) {
+      await service.startService();
+    }
+    service.invoke('updateStatus', {
+      'status': 'Monitoreo activo: ${remainingSeconds ~/ 60} min'
+    });
+  }
+
+  static Future<void> stopMonitoring() async {
+    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
+    final service = FlutterBackgroundService();
+    if (await service.isRunning()) {
+      service.invoke('stopService');
+    }
   }
 
   static Future<void> showAlarm(String alert) async {
     final service = FlutterBackgroundService();
     service.invoke('updateAlarm', {"alert": alert});
-    _showAlarmNotification(alert);
+    await _showAlarmNotification(alert);
   }
 
   static Future<void> updateStatus(String status) async {
+    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
     final service = FlutterBackgroundService();
     service.invoke('updateStatus', {"status": status});
+  }
+
+  static Future<void> sendTestAlarm() async {
+    await _showAlarmNotification(
+      'Prueba de alerta: sonido y vibración activos.',
+    );
   }
 
   static Future<void> _showAlarmNotification(String alert) async {

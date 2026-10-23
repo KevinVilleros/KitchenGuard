@@ -708,9 +708,25 @@ class AppTour {
 
   static int get totalSteps => _titles.length;
 
+  static int? tabIndexAt(int step) {
+    switch (step) {
+      case 1:
+        return 0; // Inicio
+      case 2:
+        return 1; // Monitoreo
+      case 3:
+      case 4:
+        return 0; // Inicio: conexión e historial están dentro de Inicio
+      case 5:
+        return 2; // Ajustes
+      default:
+        return null;
+    }
+  }
+
   static List<TourStep> steps(String lang) {
     return List<TourStep>.generate(_titles.length, (i) {
-      final tab = i == 0 ? null : i - 1;
+      final tab = tabIndexAt(i);
       return TourStep(_l(_titles[i], lang), _l(_bodies[i], lang), tab);
     });
   }

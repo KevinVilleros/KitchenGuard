@@ -10,17 +10,19 @@ class TourController extends ChangeNotifier {
   int get step => _step;
   int get totalSteps => AppTour.totalSteps;
 
-  /// Pestaña que debe resaltarse en el paso actual, o null si es una tarjeta
-  /// central (paso de bienvenida).
-  int? get highlightedTab => _step == 0 ? null : _step - 1;
+  /// Pestaña válida que debe resaltarse en el paso actual.
+  int? get highlightedTab => AppTour.tabIndexAt(_step);
 
-  void start() {
-    _active = true;
-    _step = 0;
-    notifyListeners();
+  void start({int initialStep = 0}) {
+    if (!_active || _step != initialStep) {
+      _active = true;
+      _step = initialStep.clamp(0, totalSteps - 1);
+      notifyListeners();
+    }
   }
 
   void next() {
+    if (!_active) return;
     if (_step >= totalSteps - 1) {
       end();
     } else {
@@ -30,11 +32,12 @@ class TourController extends ChangeNotifier {
   }
 
   void prev() {
-    if (_step > 0) {
-      _step--;
-      notifyListeners();
-    }
+    if (!_active || _step <= 0) return;
+    _step--;
+    notifyListeners();
   }
+
+  void skip() => end();
 
   void end() {
     if (!_active) return;

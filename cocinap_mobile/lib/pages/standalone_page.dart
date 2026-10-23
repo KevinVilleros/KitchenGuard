@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +21,7 @@ class StandalonePage extends StatefulWidget {
 class _StandalonePageState extends State<StandalonePage> {
   String get lang => AppLocal.language;
   CameraController? _camera;
+  CameraDescription? _cameraDescription;
   final PersonDetector _detector = PersonDetector();
   Timer? _alertTimer;
   StreamSubscription<Uint8List>? _ipStreamSub;
@@ -52,8 +52,10 @@ class _StandalonePageState extends State<StandalonePage> {
     _loadDetector();
     _initVideo();
     _startAlertLoop();
-    _lastSource = context.read<StandaloneProvider>().cameraSource;
-    _lastUrl = context.read<StandaloneProvider>().cameraUrl;
+    final standalone = context.read<StandaloneProvider>();
+    _lastSource = standalone.cameraSource;
+    _lastUrl = standalone.cameraUrl;
+    standalone.restoreSession();
     context.read<StandaloneProvider>().addListener(_onProviderChanged);
   }
 
@@ -114,6 +116,7 @@ class _StandalonePageState extends State<StandalonePage> {
         if (mounted) setState(() => _cameraError = true);
         return;
       }
+      _cameraDescription = back;
       _updateRotation(back, controller);
       setState(() {
         _cameraError = false;
@@ -199,6 +202,9 @@ class _StandalonePageState extends State<StandalonePage> {
     _camera!.startImageStream((cameraImage) {
       if (_detectorLoading || !_detector.loaded) return;
       final standalone = context.read<StandaloneProvider>();
+      if (_cameraDescription != null) {
+        _updateRotation(_cameraDescription!, _camera!);
+      }
 
       _streamCounter++;
       if (_streamCounter % 20 == 1) {
@@ -241,8 +247,8 @@ class _StandalonePageState extends State<StandalonePage> {
       context
           .read<StandaloneProvider>()
           .onPersonDetected(result.count, score: result.maxScore);
-    } catch (_) {
-      // Ignorar frames defectuosos.
+    } catch (e) {
+      debugPrint('Person detection frame error: $e');
     } finally {
       _detecting = false;
     }
@@ -253,6 +259,7 @@ class _StandalonePageState extends State<StandalonePage> {
     _ipStreamSub = null;
     _camera?.dispose();
     _camera = null;
+    _cameraDescription = null;
     _lastIpFrame = null;
     _detecting = false;
     _lastDetectAt = null;
@@ -851,7 +858,6 @@ class _DeviceTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool selected;
-  final bool enabled;
   final VoidCallback onTap;
   final Widget? trailing;
   const _DeviceTile({
@@ -860,7 +866,6 @@ class _DeviceTile extends StatelessWidget {
     required this.subtitle,
     required this.selected,
     required this.onTap,
-    this.enabled = true,
     this.trailing,
   });
 
@@ -870,42 +875,39 @@ class _DeviceTile extends StatelessWidget {
     final borderColor = selected
         ? scheme.primary
         : Colors.white.withValues(alpha: 0.1);
-    return Opacity(
-      opacity: enabled ? 1 : 0.55,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.1)
-              : Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? scheme.primary.withValues(alpha: 0.1)
+            : Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: scheme.primary, size: 20),
         ),
-        child: ListTile(
-          onTap: onTap,
-          leading: Container(
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              color: scheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: scheme.primary, size: 20),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-          subtitle: Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12.5),
-          ),
-          trailing: trailing ??
-              (selected
-                  ? Icon(Icons.check_circle, color: scheme.primary)
-                  : const Icon(Icons.chevron_right)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
+        subtitle: Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 12.5),
+        ),
+        trailing: trailing ??
+            (selected
+                ? Icon(Icons.check_circle, color: scheme.primary)
+                : const Icon(Icons.chevron_right)),
       ),
     );
   }

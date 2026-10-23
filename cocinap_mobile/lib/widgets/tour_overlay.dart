@@ -93,7 +93,7 @@ class _TourOverlayState extends State<TourOverlay> {
       total: widget.tour.totalSteps,
       accent: accent,
       lang: widget.lang,
-      onSkip: widget.tour.end,
+      onSkip: widget.tour.skip,
       onPrev: widget.tour.step > 0 ? widget.tour.prev : null,
       onNext: widget.tour.next,
     );
@@ -129,9 +129,16 @@ class _TourOverlayState extends State<TourOverlay> {
                 right: 16,
                 bottom: math.max(
                   16,
-                  media.size.height - (_navRect?.top ?? media.size.height) + 12,
+                  media.size.height -
+                      (_navRect?.top ?? media.size.height) +
+                      12,
                 ),
-                child: card,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.max(180, media.size.height * 0.42),
+                  ),
+                  child: SingleChildScrollView(child: card),
+                ),
               ),
           ],
         ),

@@ -19,7 +19,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   Future<void> _finish() async {
     final settings = SettingsService();
-    await settings.setHasSeenInstallGuide(true);
+    await settings.setHasSeenOnboarding(true);
     if (mounted) {
       Navigator.of(context).pushReplacementNamed('/main');
     }
@@ -34,6 +34,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
         curve: Curves.easeOut,
       );
     }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -126,22 +132,44 @@ class _OnboardingPageState extends State<OnboardingPage> {
       _StepsPage(
         icon: Icons.smartphone,
         title: lang == "en"
-            ? "Use your phone as the camera"
-            : "Usa tu móvil como cámara",
-        steps: PhoneCameraGuide.texts(lang),
+            ? "How to start monitoring"
+            : "Cómo comenzar el monitoreo",
+        steps: lang == "en"
+            ? const [
+                "Place your phone",
+                "Point the rear camera toward the stove without blocking it.",
+                "Start monitoring",
+                "Choose how long to monitor and configure absence alerts.",
+                "Stay nearby",
+                "The app helps you detect unattended time, but it does not replace supervision.",
+              ]
+            : const [
+                "Coloca el teléfono",
+                "Apunta la cámara trasera hacia la estufa sin obstruirla.",
+                "Inicia el monitoreo",
+                "Elige cuánto tiempo vigilar y configura las alertas por ausencia.",
+                "Mantente cerca",
+                "La app ayuda a detectar una ausencia, pero no sustituye la supervisión.",
+              ],
       ),
       _StepsPage(
-        icon: Icons.videocam,
+        icon: Icons.notifications_active,
         title: lang == "en"
-            ? "Connect an IP camera"
-            : "Conecta una cámara IP",
-        steps: CameraGuide.texts(lang),
-      ),
-      _StepsPage(
-        icon: Icons.place,
-        title: CameraInstallGuide.title(lang),
-        intro: CameraInstallGuide.intro(lang),
-        steps: CameraInstallGuide.texts(lang),
+            ? "Receive alerts on time"
+            : "Recibe las alertas a tiempo",
+        steps: lang == "en"
+            ? const [
+                "Allow notifications",
+                "The app requests permission to show alarms and sounds.",
+                "Configure intervals",
+                "Choose when CocinaP should remind you if no person is detected.",
+              ]
+            : const [
+                "Permite las notificaciones",
+                "La app solicita permiso para mostrar alarmas y sonidos.",
+                "Configura los intervalos",
+                "Elige cuándo CocinaP debe avisarte si no detecta una persona.",
+              ],
       ),
       _InterfacePage(lang: lang),
       _PrivacyPage(lang: lang),
@@ -157,35 +185,27 @@ class _InterfacePage extends StatelessWidget {
   static const List<IconData> _icons = [
     Icons.home,
     Icons.phone_android,
-    Icons.qr_code_scanner,
-    Icons.warning_amber,
     Icons.tune,
   ];
 
   List<String> get _desc {
     if (lang == "en") {
       return [
-        "Overview: status, objectives and how CocinaP works",
-        "Watch your kitchen and get the alerts",
-        "Link your PC or an IP camera",
-        "History of fire, smoke and unattended alerts",
-        "Duration, sensitivity, language and more",
+        "Overview: monitoring status and how CocinaP works",
+        "Watch your kitchen and receive absence alerts",
+        "Duration, sensitivity, language, intervals and more",
       ];
     }
     return [
-      "Resumen: estado, objetivos y cómo funciona",
-      "Vigila tu cocina y recibe las alertas",
-      "Conecta tu PC o una cámara IP",
-      "Historial de avisos de fuego, humo y ausencias",
-      "Duración, sensibilidad, idioma y más",
+      "Resumen: estado del monitoreo y cómo funciona CocinaP",
+      "Vigila tu cocina y recibe alertas por ausencia",
+      "Duración, sensibilidad, idioma, intervalos y más",
     ];
   }
 
   List<String> get _tabs => [
         NavLabels.home(lang),
         NavLabels.monitoring(lang),
-        NavLabels.connect(lang),
-        NavLabels.alarms(lang),
         NavLabels.settings(lang),
       ];
 
@@ -212,8 +232,8 @@ class _InterfacePage extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           lang == "en"
-              ? "The app is organized in five tabs at the bottom. Here is what each one does:"
-              : "La app se organiza en cinco pestañas en la parte inferior. Esto hace cada una:",
+              ? "The app is organized in three tabs at the bottom. Here is what each one does:"
+              : "La app se organiza en tres pestañas en la parte inferior. Esto hace cada una:",
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.white70),
         ),
@@ -241,8 +261,8 @@ class _InterfacePage extends StatelessWidget {
               Expanded(
                 child: Text(
                   lang == "en"
-                      ? "When you finish, a short guided tour will highlight each tab."
-                      : "Al terminar, un breve tour guiado resaltará cada pestaña.",
+                      ? "After this introduction, the first-use tour will highlight the main tabs."
+                      : "Después de esta introducción, el tour inicial resaltará las pestañas principales.",
                   style: const TextStyle(fontSize: 12.5, color: Colors.white70),
                 ),
               ),
@@ -456,13 +476,11 @@ class _PointCard extends StatelessWidget {
 class _StepsPage extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String? intro;
   final List<String> steps;
   const _StepsPage({
     required this.icon,
     required this.title,
     required this.steps,
-    this.intro,
   });
 
   @override
@@ -483,14 +501,6 @@ class _StepsPage extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-        if (intro != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            intro!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.white70),
-          ),
-        ],
         const SizedBox(height: 20),
         for (var i = 0; i < steps.length; i += 2) ...[
           _StepTile(

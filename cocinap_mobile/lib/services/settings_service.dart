@@ -2,7 +2,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
   static const _keyServerUrl = 'server_url';
-  static const _keyAutoConnect = 'auto_connect';
   static const _keyRecentServers = 'recent_servers';
   static const _keyApiKey = 'api_key';
   static const _keyStandaloneDuration = 'standalone_duration';
@@ -11,6 +10,7 @@ class SettingsService {
   static const _keyStandaloneConfidence = 'standalone_confidence';
   static const _keyStandaloneSource = 'standalone_source';
   static const _keyStandaloneCameraUrl = 'standalone_camera_url';
+  static const _keyHasSeenOnboarding = 'has_seen_onboarding';
   static const _keyHasSeenInstallGuide = 'has_seen_install_guide';
   static const _keyHasSeenAppTour = 'has_seen_app_tour';
   static const _keyLanguage = 'app_language';
@@ -104,6 +104,16 @@ class SettingsService {
     await prefs.setString(_keyStandaloneCameraUrl, url);
   }
 
+  Future<bool> getHasSeenOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyHasSeenOnboarding) ?? false;
+  }
+
+  Future<void> setHasSeenOnboarding(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyHasSeenOnboarding, value);
+  }
+
   Future<bool> getHasSeenInstallGuide() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keyHasSeenInstallGuide) ?? false;
@@ -177,16 +187,6 @@ class SettingsService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyServerUrl, url);
     await _addRecent(prefs, url);
-  }
-
-  Future<bool> getAutoConnect() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyAutoConnect) ?? true;
-  }
-
-  Future<void> setAutoConnect(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyAutoConnect, value);
   }
 
   Future<List<String>> getRecentServers() async {

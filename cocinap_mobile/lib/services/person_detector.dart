@@ -213,35 +213,55 @@ class PersonDetector {
 
       if (group == ImageFormatGroup.yuv420 ||
           group == ImageFormatGroup.nv21) {
+        if (image.planes.isEmpty) return null;
         final yPlane = image.planes[0];
-        final uPlane = image.planes[1];
-        final vPlane = image.planes[2];
-
         final nv21 = Uint8List(width * height + width * height ~/ 2);
 
         var pos = 0;
         for (var y = 0; y < height; y++) {
           final rowStart = y * yPlane.bytesPerRow;
-          for (var x = 0; x < width; x++) {
-            nv21[pos++] = yPlane.bytes[rowStart + x];
-          }
+          final rowEnd = rowStart + width;
+          if (rowEnd > yPlane.bytes.length) return null;
+          nv21.setRange(pos, pos + width, yPlane.bytes, rowStart);
+          pos += width;
         }
 
-        final uvRowStride = uPlane.bytesPerRow;
-        final uvPixelStride = uPlane.bytesPerPixel ?? 1;
-        for (var y = 0; y < height ~/ 2; y++) {
-          final rowStart = y * uvRowStride;
-          for (var x = 0; x < width ~/ 2; x++) {
-            if (vPlane.bytes.isEmpty) {
-              // Ya viene intercalado como VU en el plano 1 (NV21).
-              final vu = rowStart + x * 2;
-              nv21[pos++] = uPlane.bytes[vu]; // V
-              nv21[pos++] = uPlane.bytes[vu + 1]; // U
-            } else {
-              final uvIndex = rowStart + x * uvPixelStride;
-              nv21[pos++] = vPlane.bytes[uvIndex]; // V
-              nv21[pos++] = uPlane.bytes[uvIndex]; // U
+        if (image.planes.length == 1) return null;
+
+        final uvPlane = image.planes[1];
+        final uvRowStride = uvPlane.bytesPerRow;
+        final uvPixelStride = uvPlane.bytesPerPixel ?? 1;
+        if (uvPixelStride <= 0) return null;
+
+        if (image.planes.length == 2) {
+          // NV21: plano único intercalado VU.
+          for (var y = 0; y < height ~/ 2; y++) {
+            final rowStart = y * uvRowStride;
+            for (var x = 0; x < width ~/ 2; x++) {
+              final vuIndex = rowStart + x * uvPixelStride;
+              if (vuIndex + 1 >= uvPlane.bytes.length) return null;
+              nv21[pos++] = uvPlane.bytes[vuIndex]; // V
+              nv21[pos++] = uvPlane.bytes[vuIndex + 1]; // U
             }
+          }
+          return nv21;
+        }
+
+        final uPlane = image.planes[1];
+        final vPlane = image.planes[2];
+        final uRowStride = uPlane.bytesPerRow;
+        final vRowStride = vPlane.bytesPerRow;
+        final uPixelStride = uPlane.bytesPerPixel ?? 1;
+        final vPixelStride = vPlane.bytesPerPixel ?? 1;
+        for (var y = 0; y < height ~/ 2; y++) {
+          for (var x = 0; x < width ~/ 2; x++) {
+            final uIndex = y * uRowStride + x * uPixelStride;
+            final vIndex = y * vRowStride + x * vPixelStride;
+            if (vIndex >= vPlane.bytes.length || uIndex >= uPlane.bytes.length) {
+              return null;
+            }
+            nv21[pos++] = vPlane.bytes[vIndex]; // V
+            nv21[pos++] = uPlane.bytes[uIndex]; // U
           }
         }
         return nv21;
@@ -251,11 +271,12 @@ class PersonDetector {
         final plane = image.planes[0];
         final bgra = plane.bytes;
         final rgbImage = img.Image(width: width, height: height);
-        var idx = 0;
         for (var y = 0; y < height; y++) {
+          final rowStart = y * plane.bytesPerRow;
           for (var x = 0; x < width; x++) {
+            final idx = rowStart + x * 4;
+            if (idx + 2 >= bgra.length) return null;
             rgbImage.setPixelRgb(x, y, bgra[idx + 2], bgra[idx + 1], bgra[idx]);
-            idx += 4;
           }
         }
         return _imageToNv21(rgbImage);

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/standalone_provider.dart';
 import '../providers/tour_controller.dart';
 import '../services/settings_service.dart';
+import '../services/background_service.dart';
 import '../content/content.dart';
 import 'help_page.dart';
 
@@ -14,18 +15,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _autoConnect = true;
-
   @override
   void initState() {
     super.initState();
-    _loadSettings();
     _loadStandalone();
-  }
-
-  Future<void> _loadSettings() async {
-    final auto = await context.read<SettingsService>().getAutoConnect();
-    if (mounted) setState(() => _autoConnect = auto);
   }
 
   Future<void> _loadStandalone() async {
@@ -321,6 +314,11 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: const Icon(Icons.notifications_active),
             title: Text(l("Notificaciones", "Notifications")),
             subtitle: Text(l("Avisos locales con sonido y vibración", "Local alerts with sound and vibration")),
+            trailing: FilledButton.tonalIcon(
+              onPressed: BackgroundServiceManager.sendTestAlarm,
+              icon: const Icon(Icons.notifications_active_outlined, size: 18),
+              label: Text(l("Probar", "Test")),
+            ),
           ),
           const Divider(),
           const Padding(

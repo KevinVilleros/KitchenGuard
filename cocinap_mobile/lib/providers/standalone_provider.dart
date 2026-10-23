@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Fuente de video del modo independiente.
 enum StandaloneCameraSource {
@@ -60,6 +61,10 @@ class StandaloneProvider extends ChangeNotifier {
   DateTime? _lastPersonSeen;
   bool _cameraActive = false;
   double _lastScore = 0;
+  int _consecutivePresentFrames = 0;
+  int _consecutiveAbsentFrames = 0;
+  static const int _presenceConfirmFrames = 2;
+  static const int _absenceConfirmFrames = 3;
 
   // Referencia para medir cuánto tiempo lleva la cocina sin persona:
   // el último momento en que se vio a alguien, o el inicio del monitoreo.
@@ -98,6 +103,9 @@ class StandaloneProvider extends ChangeNotifier {
   double get lastScore => _lastScore;
   double get confidence => _confidence;
   int get noPersonAlertSeconds => _noPersonAlertSeconds;
+  int get consecutivePresentFrames => _consecutivePresentFrames;
+  int get consecutiveAbsentFrames => _consecutiveAbsentFrames;
+
   int get dangerMinutes => _dangerMinutes;
   bool get intervalAlertsEnabled => _intervalAlertsEnabled;
   AlertRepeatMode get repeatMode => _repeatMode;
@@ -158,6 +166,9 @@ class StandaloneProvider extends ChangeNotifier {
     _remainingSeconds = _durationMinutes * 60;
     _timerRunning = true;
     _timerPaused = false;
+    _personPresent = false;
+    _consecutivePresentFrames = 0;
+    _consecutiveAbsentFrames = 0;
     _lastPersonSeen = null;
     _timerStartedAt = DateTime.now();
     _lastAlertAt = null;
@@ -165,6 +176,7 @@ class StandaloneProvider extends ChangeNotifier {
     _firedIntervals.clear();
     _timerTick?.cancel();
     _timerTick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+    _persistSession();
     notifyListeners();
   }
 
@@ -194,7 +206,10 @@ class StandaloneProvider extends ChangeNotifier {
     _alerted = false;
     _lastAlertAt = null;
     _timerStartedAt = null;
+    _consecutivePresentFrames = 0;
+    _consecutiveAbsentFrames = 0;
     _firedIntervals.clear();
+    _clearSession();
     notifyListeners();
   }
 
@@ -254,19 +269,88 @@ class StandaloneProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Actualiza el resultado de detección de personas desde el detector.
+  /// Confirma presencia/ausencia tras frames consecutivos para reducir
+  /// falsos positivos durante parpadeos de ML Kit.
   void onPersonDetected(int count, {double score = 0}) {
     _lastScore = score;
-    final present = count > 0;
-    if (present) {
+    if (count > 0) {
+      _consecutivePresentFrames++;
+      _consecutiveAbsentFrames = 0;
+    } else {
+      _consecutiveAbsentFrames++;
+      _consecutivePresentFrames = 0;
+    }
+
+    final confirmedPresent =
+        _consecutivePresentFrames >= _presenceConfirmFrames;
+    final confirmedAbsent =
+        _consecutiveAbsentFrames >= _absenceConfirmFrames;
+
+    if (confirmedPresent) {
       _lastPersonSeen = DateTime.now();
       _alerted = false;
       _lastAlertAt = null;
       _firedIntervals.clear();
     }
-    if (_personPresent == present) return;
-    _personPresent = present;
+
+    final nextPresent = confirmedPresent
+        ? true
+        : confirmedAbsent
+            ? false
+            : _personPresent;
+    if (_personPresent == nextPresent) return;
+
+    _personPresent = nextPresent;
     notifyListeners();
+  }
+
+  Future<void> _persistSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('standalone_session_running', true);
+    await prefs.setInt('standalone_session_remaining_seconds', _remainingSeconds);
+    await prefs.setInt('standalone_session_duration_minutes', _durationMinutes);
+    await prefs.setInt(
+      'standalone_session_started_at_ms',
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('standalone_session_running') != true) return;
+
+    final startedAt = prefs.getInt('standalone_session_started_at_ms');
+    final savedRemaining = prefs.getInt('standalone_session_remaining_seconds');
+    final savedDuration = prefs.getInt('standalone_session_duration_minutes');
+    if (startedAt == null || savedRemaining == null || savedDuration == null) {
+      await _clearSession();
+      return;
+    }
+
+    final elapsed = DateTime.now().millisecondsSinceEpoch - startedAt;
+    final elapsedSeconds = elapsed ~/ 1000;
+    final remaining = savedRemaining - elapsedSeconds;
+    if (remaining <= 0) {
+      await _clearSession();
+      return;
+    }
+
+    _durationMinutes = savedDuration.clamp(1, 240).toInt();
+    _remainingSeconds = remaining;
+    _timerRunning = true;
+    _timerPaused = false;
+    _timerStartedAt = DateTime.now().subtract(Duration(seconds: elapsedSeconds));
+    _timerTick?.cancel();
+    _timerTick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+    notifyListeners();
+  }
+
+  Future<void> _clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('standalone_session_running');
+    await prefs.remove('standalone_session_remaining_seconds');
+    await prefs.remove('standalone_session_duration_minutes');
+    await prefs.remove('standalone_session_started_at_ms');
   }
 
   /// Devuelve el intervalo (en minutos) que debe dispararse ahora, o `null` si
