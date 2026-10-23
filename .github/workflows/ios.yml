@@ -35,7 +35,7 @@ jobs:
       - name: Build iOS app (genera pods y compila)
         run: |
           set +e
-          flutter build ios --release --no-codesign > /tmp/flutter_build.log 2> /tmp/flutter_build.err
+          flutter build ios --release --no-codesign -v > /tmp/flutter_build.log 2> /tmp/flutter_build.err
           code=$?
           cat /tmp/flutter_build.log
           cat /tmp/flutter_build.err
