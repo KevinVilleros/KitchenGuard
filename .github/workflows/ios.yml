@@ -31,21 +31,31 @@ jobs:
 
       - name: Build iOS app (genera pods y compila)
         run: |
-          flutter build ios --release --no-codesign 2>&1 | tee /tmp/flutter_build.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "::error::FLUTTER BUILD FAILED - ultimas lineas del log:"
-            tail -n 60 /tmp/flutter_build.log | while IFS= read -r line; do
+          set +e
+          flutter build ios --release --no-codesign > /tmp/flutter_build.log 2> /tmp/flutter_build.err
+          code=$?
+          cat /tmp/flutter_build.log
+          cat /tmp/flutter_build.err
+          if [ $code -ne 0 ]; then
+            echo "::error::FLUTTER BUILD FAILED - stderr (ultimas lineas):"
+            tail -n 50 /tmp/flutter_build.err | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            echo "::error::FLUTTER BUILD FAILED - stdout (ultimas lineas):"
+            tail -n 25 /tmp/flutter_build.log | while IFS= read -r line; do
               echo "::error::$line"
             done
             exit 1
           fi
 
-      - name: Upload build log
+      - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: flutter-build-log
-          path: /tmp/flutter_build.log
+          path: |
+            /tmp/flutter_build.log
+            /tmp/flutter_build.err
           if-no-files-found: ignore
 
       - name: Package unsigned IPA
