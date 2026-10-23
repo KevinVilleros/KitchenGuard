@@ -37,16 +37,26 @@ jobs:
           cat /tmp/flutter_build.log
           cat /tmp/flutter_build.err
           if [ $code -ne 0 ]; then
-            echo "::error::FLUTTER BUILD FAILED - stderr (ultimas lineas):"
-            tail -n 50 /tmp/flutter_build.err | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-            echo "::error::FLUTTER BUILD FAILED - stdout (ultimas lineas):"
-            tail -n 25 /tmp/flutter_build.log | while IFS= read -r line; do
+            grep -niE "error:|Error \(Xcode\)|The following build commands failed|No such module|Undefined symbol|requires a provisioning|sandbox is not in sync" /tmp/flutter_build.log /tmp/flutter_build.err | head -n 10 | while IFS= read -r line; do
               echo "::error::$line"
             done
             exit 1
           fi
+
+      - name: Extra iOS diagnostics
+        if: failure()
+        run: |
+          echo "=== bloque de fallo de xcodebuild ==="
+          grep -n -A8 "The following build commands failed" /tmp/flutter_build.err /tmp/flutter_build.log 2>/dev/null | head -n 10 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+
+      - name: Linker diagnostics
+        if: failure()
+        run: |
+          grep -niE "ld: |clang: error|fatal error|module .* not found|Deployment Target|minimum deployment" /tmp/flutter_build.err /tmp/flutter_build.log 2>/dev/null | head -n 10 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
 
       - name: Upload build logs
         if: always()
