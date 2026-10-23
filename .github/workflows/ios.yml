@@ -12,6 +12,9 @@ on:
       - 'cocinap_mobile/**'
       - '.github/workflows/ios.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build-unsigned:
     name: Build IPA (unsigned)
@@ -57,6 +60,19 @@ jobs:
           grep -niE "ld: |clang: error|fatal error|module .* not found|Deployment Target|minimum deployment" /tmp/flutter_build.err /tmp/flutter_build.log 2>/dev/null | head -n 10 | while IFS= read -r line; do
             echo "::error::$line"
           done
+
+      - name: Publicar logs en rama ci-logs
+        if: failure()
+        run: |
+          cp /tmp/flutter_build.log ../flutter_build.log || true
+          cp /tmp/flutter_build.err ../flutter_build.err || true
+          cd ..
+          git config user.email "ci@local"
+          git config user.name "ci"
+          git checkout -B ci-logs
+          git add -f flutter_build.log flutter_build.err
+          git commit -m "ci logs run ${{ github.run_id }}" || true
+          git push -f origin ci-logs || true
 
       - name: Upload build logs
         if: always()
