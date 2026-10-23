@@ -1,0 +1,53 @@
+[   +6 ms] The following plugins do not support Swift Package Manager for ios:
+             - flutter_background_service_ios
+             - flutter_local_notifications
+             - google_mlkit_commons
+             - google_mlkit_pose_detection
+           This will become an error in a future version of Flutter. Please contact the plugin maintainers to request Swift Package Manager adoption.
+[  +30 ms] ════════════════════════════════════════════════════════════════════════════════
+           Building a deployable iOS app requires a selected Development Team with a 
+           Provisioning Profile. Please ensure that a Development Team is selected by:
+             1- Open the Flutter project's Xcode target with
+                  open ios/Runner.xcworkspace
+             2- Select the 'Runner' project in the navigator then the 'Runner' target
+                in the project settings
+             3- Make sure a 'Development Team' is selected under Signing & Capabilities > Team. 
+                You may need to:
+                    - Log in with your Apple ID in Xcode first
+                    - Ensure you have a valid unique Bundle ID
+                    - Register your device with your Apple Developer Account
+                    - Let Xcode automatically provision a profile for your app
+             4- Build or run your project again
+
+           For more information, please visit:
+             https://flutter.dev/to/ios-development-team
+
+           Or run on an iOS simulator without code signing
+           ════════════════════════════════════════════════════════════════════════════════
+[   +1 ms] Encountered error while building for device.
+[        ] 
+           #0      throwToolExit (package:flutter_tools/src/base/common.dart:34:3)
+           #1      _BuildIOSSubCommand.runCommand (package:flutter_tools/src/commands/build_ios.dart:1014:7)
+           <asynchronous suspension>
+           #2      FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1663:27)
+           <asynchronous suspension>
+           #3      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #4      CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+           <asynchronous suspension>
+           #5      FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:496:9)
+           <asynchronous suspension>
+           #6      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #7      FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:431:5)
+           <asynchronous suspension>
+           #8      FlutterCommandRunner.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:307:33)
+           <asynchronous suspension>
+           #9      run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+           <asynchronous suspension>
+           #10     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+           <asynchronous suspension>
+           #11     main (package:flutter_tools/executable.dart:103:3)
+           <asynchronous suspension>
+
+
