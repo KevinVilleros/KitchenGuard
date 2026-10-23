@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import '../providers/standalone_provider.dart';
 import '../services/person_detector.dart';
+import '../services/background_service.dart';
 import '../content/content.dart';
 
 /// Página del modo independiente: monitorea la cocina en el móvil (con la
@@ -19,9 +20,9 @@ class StandalonePage extends StatefulWidget {
 }
 
 class _StandalonePageState extends State<StandalonePage> {
+  String get lang => AppLocal.language;
   CameraController? _camera;
   final PersonDetector _detector = PersonDetector();
-  final MjpegService _mjpeg = MjpegService();
   Timer? _alertTimer;
   StreamSubscription<Uint8List>? _ipStreamSub;
   bool _cameraError = false;
@@ -186,14 +187,7 @@ class _StandalonePageState extends State<StandalonePage> {
   /// Consume un stream MJPEG de una cámara IP y lo envía al detector.
   void _startIpStream(String url) {
     _lastIpFrame = null;
-    final standalone = context.read<StandaloneProvider>();
-    _ipStreamSub = _mjpeg.start(url).listen((frame) {
-      if (mounted) setState(() => _lastIpFrame = frame);
-      _runDetection(() => _detector.detectFromJpeg(
-            frame,
-            confidence: standalone.confidence,
-          ));
-    });
+    setState(() => _cameraError = true);
   }
 
   /// Stream de frames de la cámara del móvil → detección de personas.
@@ -257,7 +251,6 @@ class _StandalonePageState extends State<StandalonePage> {
   void _stopVideo() {
     _ipStreamSub?.cancel();
     _ipStreamSub = null;
-    _mjpeg.stop();
     _camera?.dispose();
     _camera = null;
     _lastIpFrame = null;
@@ -274,14 +267,14 @@ class _StandalonePageState extends State<StandalonePage> {
       final interval = standalone.nextDueInterval();
       if (interval == null) return;
 
-    final lang = AppLocal.language;
-    final n = standalone.firedIntervalCount + 1;
-    final message = lang == "en"
-        ? "Kitchen unattended ($interval min without person). Alert #$n."
-        : "Cocina desatendida ($interval min sin persona). Alerta #$n.";
-    standalone.markIntervalFired(interval, message);
-    BackgroundServiceManager.showAlarm(message);
-    BackgroundServiceManager.updateStatus(lang == "en" ? "No person: $interval min" : "Sin persona: $interval min");
+      final lang = AppLocal.language;
+      final n = standalone.firedIntervalCount + 1;
+      final message = lang == "en"
+          ? "Kitchen unattended ($interval min without person). Alert #$n."
+          : "Cocina desatendida ($interval min sin persona). Alerta #$n.";
+      standalone.markIntervalFired(interval, message);
+      BackgroundServiceManager.showAlarm(message);
+      BackgroundServiceManager.updateStatus(lang == "en" ? "No person: $interval min" : "Sin persona: $interval min");
     });
   }
 
