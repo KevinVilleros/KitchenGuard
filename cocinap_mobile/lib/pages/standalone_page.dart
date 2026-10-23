@@ -3,15 +3,10 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image/image.dart' as img;
+import 'package:flutter/services.dart';
 import '../providers/standalone_provider.dart';
-import '../providers/server_provider.dart';
-import '../services/background_service.dart';
 import '../services/person_detector.dart';
-import '../services/mjpeg_service.dart';
-import '../services/settings_service.dart';
-import 'ip_camera_page.dart';
-import 'dashboard_page.dart';
+import '../content/content.dart';
 
 /// Página del modo independiente: monitorea la cocina en el móvil (con la
 /// cámara del dispositivo o una cámara IP) usando un temporizador configurable.
@@ -34,6 +29,21 @@ class _StandalonePageState extends State<StandalonePage> {
   Uint8List? _lastIpFrame;
   StandaloneCameraSource _lastSource = StandaloneCameraSource.phone;
   String _lastUrl = "";
+
+  // Último resultado de detección para el overlay gráfico de depuración.
+  DetectionResult _lastResult = DetectionResult.empty;
+  int _framesProcessed = 0;
+  int _streamCounter = 0;
+
+  // --- Control de rendimiento de la detección ---
+  // Evita solapar inferencias: solo se procesa un frame cuando el anterior
+  // terminó, y como máximo cada `_minDetectInterval`.
+  bool _detecting = false;
+  DateTime? _lastDetectAt;
+  static const Duration _minDetectInterval = Duration(milliseconds: 400);
+
+  // Rotación del sensor de cámara, usada para orientar el frame ante ML Kit.
+  int _rotationDegrees = 0;
 
   @override
   void initState() {
@@ -59,7 +69,7 @@ class _StandalonePageState extends State<StandalonePage> {
   Future<void> _loadDetector() async {
     setState(() => _detectorLoading = true);
     try {
-      await _detector.load('assets/models/ssd_mobilenet_v2_coco.tflite');
+      await _detector.load('');
     } catch (e) {
       debugPrint('PersonDetector load error: $e');
     }
@@ -98,19 +108,78 @@ class _StandalonePageState extends State<StandalonePage> {
       } catch (_) {
         back = cameras.first;
       }
-      final controller = CameraController(
-        back,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
-      await controller.initialize();
-      if (!mounted) return;
-      setState(() => _cameraError = false);
-      setState(() => _camera = controller);
+      final controller = await _createController(back);
+      if (!mounted || controller == null) {
+        if (mounted) setState(() => _cameraError = true);
+        return;
+      }
+      _updateRotation(back, controller);
+      setState(() {
+        _cameraError = false;
+        _camera = controller;
+      });
       standalone.setCameraActive(true);
       _startPhoneStream();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Camera init error: $e');
       if (mounted) setState(() => _cameraError = true);
+    }
+  }
+
+  /// Crea el [CameraController] probando varias combinaciones hasta encontrar
+  /// una que el dispositivo soporte. La cámara del móvil es el punto más
+  /// frágil: distintas resoluciones y formatos pueden fallar con
+  /// "No supported surface combination".
+  Future<CameraController?> _createController(CameraDescription camera) async {    const attempts = <(ResolutionPreset, ImageFormatGroup?)>[
+      (ResolutionPreset.low, ImageFormatGroup.yuv420),
+      (ResolutionPreset.low, null),
+      (ResolutionPreset.medium, ImageFormatGroup.yuv420),
+      (ResolutionPreset.medium, null),
+      (ResolutionPreset.high, null),
+    ];
+    for (final (preset, fmt) in attempts) {
+      try {
+        final controller = CameraController(
+          camera,
+          preset,
+          enableAudio: false,
+          imageFormatGroup: fmt ?? ImageFormatGroup.yuv420,
+        );
+        await controller.initialize();
+        debugPrint('Camera OK preset=$preset format=$fmt');
+        return controller;
+      } catch (e) {
+        debugPrint('Camera try failed preset=$preset format=$fmt: $e');
+      }
+    }
+    return null;
+  }
+
+  /// Calcula la rotación a aplicar al frame según el sensor de la cámara y la
+  /// orientación actual del dispositivo.
+  void _updateRotation(CameraDescription camera, CameraController controller) {
+    final sensor = camera.sensorOrientation;
+    final device = controller.value.deviceOrientation;
+    int rotation;
+    if (camera.lensDirection == CameraLensDirection.front) {
+      rotation = (sensor + _deviceRotation(device)) % 360;
+    } else {
+      rotation = (sensor - _deviceRotation(device) + 360) % 360;
+    }
+    _rotationDegrees = rotation;
+    debugPrint('Camera rotation=$rotation sensor=$sensor device=$device');
+  }
+
+  int _deviceRotation(DeviceOrientation orientation) {
+    switch (orientation) {
+      case DeviceOrientation.portraitUp:
+        return 0;
+      case DeviceOrientation.landscapeLeft:
+        return 90;
+      case DeviceOrientation.portraitDown:
+        return 180;
+      case DeviceOrientation.landscapeRight:
+        return 270;
     }
   }
 
@@ -118,39 +187,71 @@ class _StandalonePageState extends State<StandalonePage> {
   void _startIpStream(String url) {
     _lastIpFrame = null;
     final standalone = context.read<StandaloneProvider>();
-    _ipStreamSub = _mjpeg.start(url).listen((frame) async {
+    _ipStreamSub = _mjpeg.start(url).listen((frame) {
       if (mounted) setState(() => _lastIpFrame = frame);
-      if (_detectorLoading || !_detector.loaded) return;
-      final count = await _detector.detectFromJpeg(frame,
-          confidence: standalone.confidence);
-      standalone.onPersonDetected(count);
+      _runDetection(() => _detector.detectFromJpeg(
+            frame,
+            confidence: standalone.confidence,
+          ));
     });
   }
 
   /// Stream de frames de la cámara del móvil → detección de personas.
+  ///
+  /// Se pide formato JPEG (Android suele respetarlo), pero si el dispositivo
+  /// entrega YUV420 se convierte a RGB. Así la detección funciona en ambos
+  /// casos.
   void _startPhoneStream() {
-    final standalone = context.read<StandaloneProvider>();
-    _camera!.startImageStream((cameraImage) async {
+    _camera!.startImageStream((cameraImage) {
       if (_detectorLoading || !_detector.loaded) return;
+      final standalone = context.read<StandaloneProvider>();
 
-      try {
-        final plane = cameraImage.planes.first;
-        final width = cameraImage.width;
-        final height = cameraImage.height;
-        final yBytes = plane.bytes;
+      _streamCounter++;
+      if (_streamCounter % 20 == 1) {
+        debugPrint('PhoneStream group=${cameraImage.format.group} '
+            'w=${cameraImage.width} h=${cameraImage.height} '
+            'planes=${cameraImage.planes.length}');
+      }
 
-        final gray = img.Image.fromBytes(
-          width: width,
-          height: height,
-          bytes: yBytes.buffer,
-          numChannels: 1,
-        );
-
-        final count = await _detector.detectPerson(gray,
-            confidence: standalone.confidence);
-        standalone.onPersonDetected(count);
-      } catch (_) {}
+      // ML Kit recibe el frame crudo de la cámara (YUV420/NV21) y detecta
+      // personas reales por etiqueta, sin conversiones manuales.
+      _runDetection(() => _detector.detectFromCameraImage(
+            cameraImage,
+            rotationDegrees: _rotationDegrees,
+            confidence: standalone.confidence,
+          ));
+    }).catchError((Object e) {
+      debugPrint('PhoneStream error: $e');
+      if (mounted) setState(() => _cameraError = true);
     });
+  }
+
+  /// Ejecuta una detección respetando el throttle y evitando solapamientos.
+  Future<void> _runDetection(
+    Future<DetectionResult> Function() task,
+  ) async {
+    if (_detecting || _detectorLoading || !_detector.loaded) return;
+    final now = DateTime.now();
+    final last = _lastDetectAt;
+    if (last != null && now.difference(last) < _minDetectInterval) return;
+
+    _detecting = true;
+    _lastDetectAt = now;
+    try {
+      final result = await task();
+      if (!mounted) return;
+      setState(() {
+        _lastResult = result;
+        _framesProcessed++;
+      });
+      context
+          .read<StandaloneProvider>()
+          .onPersonDetected(result.count, score: result.maxScore);
+    } catch (_) {
+      // Ignorar frames defectuosos.
+    } finally {
+      _detecting = false;
+    }
   }
 
   void _stopVideo() {
@@ -160,20 +261,27 @@ class _StandalonePageState extends State<StandalonePage> {
     _camera?.dispose();
     _camera = null;
     _lastIpFrame = null;
+    _detecting = false;
+    _lastDetectAt = null;
+    _framesProcessed = 0;
   }
 
+  /// Loop que evalúa cada segundo si corresponde emitir una alerta por
+  /// intervalo (10, 15, 20... min sin persona) y lanza la notificación.
   void _startAlertLoop() {
-    _alertTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    _alertTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       final standalone = context.read<StandaloneProvider>();
-      if (standalone.shouldAlert()) {
-        final absence = standalone.absenceSeconds;
-        standalone.triggerAlert(
-          "Sin detectar persona en la cocina por ${absence}s",
-        );
-        BackgroundServiceManager.showAlarm(
-          "Cocina desatendida: sin persona por ${absence}s. Revise la cocina.",
-        );
-      }
+      final interval = standalone.nextDueInterval();
+      if (interval == null) return;
+
+    final lang = AppLocal.language;
+    final n = standalone.firedIntervalCount + 1;
+    final message = lang == "en"
+        ? "Kitchen unattended ($interval min without person). Alert #$n."
+        : "Cocina desatendida ($interval min sin persona). Alerta #$n.";
+    standalone.markIntervalFired(interval, message);
+    BackgroundServiceManager.showAlarm(message);
+    BackgroundServiceManager.updateStatus(lang == "en" ? "No person: $interval min" : "Sin persona: $interval min");
     });
   }
 
@@ -239,10 +347,10 @@ class _StandalonePageState extends State<StandalonePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Modo independiente"),
+        title: Text(AppLocal.language == "en" ? "Standalone mode" : "Modo independiente"),
         actions: [
           IconButton(
-            tooltip: "Cambiar dispositivo o cámara",
+            tooltip: AppLocal.language == "en" ? "Change device or camera" : "Cambiar dispositivo o cámara",
             icon: const Icon(Icons.devices),
             onPressed: () => _showDevicesSheet(context),
           ),
@@ -317,6 +425,40 @@ class _StandalonePageState extends State<StandalonePage> {
                       personPresent: standalone.personPresent,
                     ),
                   ),
+                // Overlay gráfico de detección (cajas + conteo) para verificar
+                // que el modelo está reconociendo objetos en vivo.
+                if (!_cameraError && _detector.loaded)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _DetectionOverlayPainter(
+                          result: _lastResult,
+                          frameWidth: standalone.cameraSource ==
+                                  StandaloneCameraSource.phone
+                              ? (_camera?.value.previewSize?.height ?? 0)
+                              : 0,
+                          frameHeight: standalone.cameraSource ==
+                                  StandaloneCameraSource.phone
+                              ? (_camera?.value.previewSize?.width ?? 0)
+                              : 0,
+                        ),
+                      ),
+                    ),
+                  ),
+                // Panel de diagnóstico de detección.
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: _DetectionDebugPanel(
+                    loading: _detectorLoading,
+                    loaded: _detector.loaded,
+                    people: _lastResult.count,
+                    maxScore: _lastResult.maxScore,
+                    total: _lastResult.boxes.length,
+                    frames: _framesProcessed,
+                    info: _detector.loaded ? _detector.debugInfo : "",
+                  ),
+                ),
               ],
             ),
           ),
@@ -335,7 +477,7 @@ class _StandalonePageState extends State<StandalonePage> {
                 children: [
                   _StatTile(
                     icon: Icons.timer,
-                    label: standalone.timerRunning ? "Tiempo restante" : "Temporizador",
+                    label: standalone.timerRunning ? (lang == "en" ? "Time remaining" : "Tiempo restante") : (lang == "en" ? "Timer" : "Temporizador"),
                     value: standalone.timerRunning
                         ? standalone.remainingLabel
                         : "${standalone.durationMinutes} min",
@@ -348,14 +490,93 @@ class _StandalonePageState extends State<StandalonePage> {
                   ),
                   _StatTile(
                     icon: Icons.person,
-                    label: "Persona en cocina",
-                    value: standalone.personPresent ? "SÍ" : "NO",
+                    label: lang == "en" ? "Person in kitchen" : "Persona en cocina",
+                    value: standalone.personPresent ? (lang == "en" ? "YES" : "SÍ") : (lang == "en" ? "NO" : "NO"),
                     color: color,
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: Colors.white12,
+                  ),
+                  _StatTile(
+                    icon: Icons.notification_important,
+                    label: lang == "en" ? "No person" : "Sin persona",
+                    value: standalone.timerRunning && !standalone.personPresent
+                        ? "${standalone.absenceMinutes.toStringAsFixed(1)} min"
+                        : "--",
+                    color: standalone.timerRunning && !standalone.personPresent
+                        ? Colors.redAccent
+                        : Colors.grey,
                   ),
                 ],
               ),
             ),
           ),
+
+          // Próxima alerta por intervalos
+          if (standalone.intervalAlertsEnabled &&
+              standalone.sortedIntervals.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                _nextAlertLabel(standalone),
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+          // Historial de alertas por intervalos
+          if (standalone.alerts.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade900.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade900),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber,
+                            color: Colors.redAccent, size: 16),
+                        const SizedBox(width: 6),
+              Text(
+                lang == "en" ? "Recent alerts" : "Alertas recientes",
+                style: TextStyle(
+                  color: Colors.red.shade200,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: standalone.clearAlerts,
+                        child: Text(
+                          lang == "en" ? "Clear" : "Limpiar",
+                          style: TextStyle(
+                              color: Colors.grey.shade400, fontSize: 12),
+                        ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ...standalone.alerts.take(3).map(
+                          (a) => Text(
+                            "• ${a.message}",
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+            ),
 
           // Controles
           Padding(
@@ -367,26 +588,27 @@ class _StandalonePageState extends State<StandalonePage> {
                   ElevatedButton.icon(
                     onPressed: () => _startTimer(context),
                     icon: const Icon(Icons.play_arrow),
-                    label: const Text("Iniciar monitoreo"),
+                    label: Text(lang == "en" ? "Start monitoring" : "Iniciar monitoreo"),
                   ),
                 if (standalone.timerRunning && !standalone.timerPaused)
                   ElevatedButton.icon(
                     onPressed: () => standalone.pauseTimer(),
                     icon: const Icon(Icons.pause),
-                    label: const Text("Pausa"),
+                    label: Text(lang == "en" ? "Pause" : "Pausa"),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700),
                   ),
                 if (standalone.timerRunning && standalone.timerPaused)
                   ElevatedButton.icon(
                     onPressed: () => standalone.resumeTimer(),
                     icon: const Icon(Icons.play_arrow),
-                    label: const Text("Reanudar"),
+                    label: Text(lang == "en" ? "Resume" : "Reanudar"),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
                   ),
                 if (standalone.timerRunning)
                   ElevatedButton.icon(
                     onPressed: () => standalone.stopTimer(),
                     icon: const Icon(Icons.stop),
-                    label: const Text("Parar"),
+                    label: Text(lang == "en" ? "Stop" : "Parar"),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
                   ),
               ],
@@ -399,10 +621,10 @@ class _StandalonePageState extends State<StandalonePage> {
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => _showDevicesSheet(context),
-                icon: const Icon(Icons.devices, size: 18),
-                label: const Text("Cambiar dispositivo o cámara"),
-              ),
+            onPressed: () => _showDevicesSheet(context),
+            icon: const Icon(Icons.devices, size: 18),
+            label: Text(AppLocal.language == "en" ? "Change device or camera" : "Cambiar dispositivo o cámara"),
+          ),
             ),
           ),
 
@@ -420,6 +642,17 @@ class _StandalonePageState extends State<StandalonePage> {
         ],
       ),
     );
+  }
+
+  /// Texto que indica la próxima alerta programada o las ya emitidas.
+  String _nextAlertLabel(StandaloneProvider standalone) {
+    final intervals = standalone.sortedIntervals;
+    if (intervals.isEmpty) return "Sin intervalos de alerta configurados";
+    final fired = standalone.firedIntervalCount;
+    if (fired < intervals.length) {
+      return "Próxima alerta a los ${intervals[fired]} min sin persona";
+    }
+    return "Todas las alertas emitidas (última: ${intervals.last} min)";
   }
 
   /// Muestra la hoja inferior con los dispositivos/cámaras disponibles,
@@ -511,19 +744,14 @@ class _DevicesSheet extends StatelessWidget {
 
   Future<void> _select(BuildContext context, StandaloneCameraSource source) async {
     final standalone = context.read<StandaloneProvider>();
-    final settings = context.read<SettingsService>();
     standalone.setCameraSource(source);
-    await settings.setStandaloneSourceIndex(
-      source == StandaloneCameraSource.ipCamera ? 1 : 0,
-    );
     if (context.mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final lang = AppLocal.language;
     final standalone = context.watch<StandaloneProvider>();
-    final server = context.watch<ServerProvider>();
-    final connected = server.status == ConnectionStatus.connected;
     final scheme = Theme.of(context).colorScheme;
     final isPhone = standalone.cameraSource == StandaloneCameraSource.phone;
 
@@ -535,13 +763,13 @@ class _DevicesSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Dispositivos y cámaras",
+              Text(
+                lang == "en" ? "Devices and cameras" : "Dispositivos y cámaras",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
-                "Elige desde dónde monitorear tu cocina",
+                lang == "en" ? "Choose where to monitor your kitchen" : "Elige desde dónde monitorear tu cocina",
                 style: TextStyle(fontSize: 13, color: Colors.white60),
               ),
               const SizedBox(height: 12),
@@ -549,8 +777,8 @@ class _DevicesSheet extends StatelessWidget {
               // Cámara del móvil
               _DeviceTile(
                 icon: Icons.smartphone,
-                title: "Cámara del móvil",
-                subtitle: "Usa la cámara trasera de este teléfono",
+                title: lang == "en" ? "Phone camera" : "Cámara del móvil",
+                subtitle: lang == "en" ? "Use rear camera of this phone" : "Usa la cámara trasera de este teléfono",
                 selected: isPhone,
                 onTap: () => _select(context, StandaloneCameraSource.phone),
               ),
@@ -558,62 +786,23 @@ class _DevicesSheet extends StatelessWidget {
               // Cámara IP
               _DeviceTile(
                 icon: Icons.videocam,
-                title: "Cámara IP (hogar / seguridad)",
+                title: lang == "en" ? "IP Camera (home / security)" : "Cámara IP (hogar / seguridad)",
                 subtitle: standalone.cameraUrl.isNotEmpty
                     ? standalone.cameraUrl
-                    : "Aún no has configurado una URL",
+                    : (lang == "en" ? "Not configured yet" : "Aún no has configurado una URL"),
                 selected: !isPhone,
-                onTap: () async {
-                  Navigator.pop(context);
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const IpCameraPage()),
-                  );
-                },
+                onTap: () {},
                 trailing: TextButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const IpCameraPage()),
-                    );
-                  },
-                  child: const Text("Configurar"),
+                  onPressed: () {},
+                  child: Text(lang == "en" ? "Configure" : "Configurar"),
                 ),
               ),
 
-              // PC conectado (opcional)
-              _DeviceTile(
-                icon: Icons.computer,
-                title: "PC con CocinaP",
-                subtitle: connected
-                    ? server.serverUrl.replaceAll("http://", "")
-                    : "No conectado · Escanea el QR del PC",
-                selected: false,
-                enabled: connected,
-                onTap: connected
-                    ? () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const DashboardPage()),
-                        );
-                      }
-                    : () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              "Conecta el PC desde la pestaña Conectar",
-                            ),
-                          ),
-                        );
-                      },
-              ),
+              // PC connection removed
 
               const SizedBox(height: 20),
               Text(
-                "Cómo conectar la app a una cámara",
+                lang == "en" ? "How to use" : "Cómo conectar la app a una cámara",
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -622,27 +811,19 @@ class _DevicesSheet extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              const _HowToRow(
+              _HowToRow(
                 number: 1,
                 icon: Icons.smartphone,
-                title: "Cámara del móvil (sin equipos)",
-                body: "Coloca el teléfono apuntando a la estufa. Es la forma "
-                    "más rápida: no necesitas nada más.",
+                title: lang == "en" ? "Phone camera (no extra equipment)" : "Cámara del móvil (sin equipos)",
+                body: lang == "en" ? "Place the phone pointing to the stove. Fastest way, no extra equipment needed." : "Coloca el teléfono apuntando a la estufa. Es la forma más rápida: no necesitas nada más.",
               ),
-              const _HowToRow(
+              _HowToRow(
                 number: 2,
                 icon: Icons.videocam,
-                title: "Cámara IP por URL MJPEG",
-                body: "Toca 'Cámara IP → Configurar' y pega la URL HTTP/MJPEG "
-                    "de tu cámara (http://usuario:pass@IP/stream).",
+                title: lang == "en" ? "IP camera via MJPEG URL" : "Cámara IP por URL MJPEG",
+                body: lang == "en" ? "Configure IP camera in Settings and paste HTTP/MJPEG URL." : "Toca 'Cámara IP → Configurar' y pega la URL HTTP/MJPEG de tu cámara.",
               ),
-              const _HowToRow(
-                number: 3,
-                icon: Icons.qr_code_scanner,
-                title: "PC con CocinaP (opcional)",
-                body: "En la pestaña 'Conectar' escanea el QR del PC para ver "
-                    "su cámara y recibir también alarmas de fuego y humo.",
-              ),
+              // PC connection section removed
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -797,6 +978,127 @@ class _HowToRow extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Dibuja las cajas detectadas por el modelo sobre la vista de la cámara.
+///
+/// Las coordenadas de [DetectedBox] son normalizadas [0,1] sobre el frame
+/// completo, por lo que se escalan directamente al tamaño del lienzo.
+class _DetectionOverlayPainter extends CustomPainter {
+  final DetectionResult result;
+  final double frameWidth;
+  final double frameHeight;
+
+  const _DetectionOverlayPainter({
+    required this.result,
+    required this.frameWidth,
+    required this.frameHeight,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final box in result.boxes) {
+      final isPerson = box.classId == 1;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isPerson ? 3 : 1.5
+        ..color = isPerson
+            ? Colors.greenAccent
+            : Colors.cyanAccent.withValues(alpha: 0.6);
+
+      final rect = Rect.fromLTRB(
+        box.left * size.width,
+        box.top * size.height,
+        box.right * size.width,
+        box.bottom * size.height,
+      );
+      canvas.drawRect(rect, paint);
+
+      final label = "${box.label} ${(box.score * 100).toStringAsFixed(0)}%";
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 11,
+            fontWeight: isPerson ? FontWeight.bold : FontWeight.normal,
+            backgroundColor: isPerson ? Colors.greenAccent : Colors.cyanAccent,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(rect.left, (rect.top - 14).clamp(0, size.height)));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DetectionOverlayPainter oldDelegate) =>
+      oldDelegate.result != result;
+}
+
+/// Panel de diagnóstico que muestra en pantalla el estado del detector.
+class _DetectionDebugPanel extends StatelessWidget {
+  final bool loading;
+  final bool loaded;
+  final int people;
+  final double maxScore;
+  final int total;
+  final int frames;
+  final String info;
+
+  const _DetectionDebugPanel({
+    required this.loading,
+    required this.loaded,
+    required this.people,
+    required this.maxScore,
+    required this.total,
+    required this.frames,
+    required this.info,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lang = AppLocal.language;
+    final status = loading
+        ? (lang == "en" ? "Loading model..." : "Cargando modelo...")
+        : (loaded ? (lang == "en" ? "Model active" : "Modelo activo") : (lang == "en" ? "Model not loaded" : "Modelo no cargado"));
+    final color = people > 0
+        ? Colors.greenAccent
+        : (loaded ? Colors.orangeAccent : Colors.redAccent);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            status,
+            style: TextStyle(
+                color: color, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            (AppLocal.language == "en" ? "People: $people  (max ${(maxScore * 100).toStringAsFixed(0)}%)" : "Personas: $people  (máx ${(maxScore * 100).toStringAsFixed(0)}%)"),
+            style: const TextStyle(color: Colors.white, fontSize: 11),
+          ),
+          Text(
+            (AppLocal.language == "en" ? "Objects: $total  Frames: $frames" : "Objetos: $total  Frames: $frames"),
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+          if (info.isNotEmpty)
+            Text(
+              info,
+              style: const TextStyle(color: Colors.white54, fontSize: 9),
+            ),
         ],
       ),
     );

@@ -9,18 +9,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.0
   provider: ^6.1.0
   shared_preferences: ^2.3.0
-  multicast_dns: ^0.3.0
   flutter_local_notifications: ^18.0.0
   cupertino_icons: ^1.0.8
   flutter_background_service: ^5.0.0
   flutter_background_service_android: ^6.0.0
   flutter_background_service_ios: ^5.0.0
-  mobile_scanner: ^6.0.0
   camera: ^0.11.0
-  tflite_flutter: ^0.12.1
+  google_mlkit_pose_detection: ^0.16.1
   path_provider: ^2.1.0
   image: ^4.2.0
 
@@ -31,5 +28,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/models/

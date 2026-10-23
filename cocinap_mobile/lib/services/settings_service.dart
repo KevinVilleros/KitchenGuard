@@ -14,6 +14,9 @@ class SettingsService {
   static const _keyHasSeenInstallGuide = 'has_seen_install_guide';
   static const _keyHasSeenAppTour = 'has_seen_app_tour';
   static const _keyLanguage = 'app_language';
+  static const _keyAlertIntervals = 'alert_intervals_minutes';
+  static const _keyIntervalAlertsEnabled = 'alert_intervals_enabled';
+  static const _keyAlertRepeatMode = 'alert_repeat_mode';
   static const _maxRecents = 5;
 
   Future<String> getLanguage() async {
@@ -119,6 +122,55 @@ class SettingsService {
   Future<void> setHasSeenAppTour(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyHasSeenAppTour, value);
+  }
+
+  /// Intervalos de alerta (en minutos) configurados por el usuario.
+  Future<List<int>> getAlertIntervals() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_keyAlertIntervals);
+    if (list == null || list.isEmpty) return const [10, 15, 20, 30];
+    final parsed = list
+        .map(int.tryParse)
+        .whereType<int>()
+        .where((m) => m >= 1 && m <= 240)
+        .toSet()
+        .toList()
+      ..sort();
+    return parsed.isEmpty ? const [10, 15, 20, 30] : parsed;
+  }
+
+  Future<void> setAlertIntervals(List<int> minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    final sorted = minutes.where((m) => m >= 1 && m <= 240).toSet().toList()
+      ..sort();
+    await prefs.setStringList(
+      _keyAlertIntervals,
+      sorted.map((m) => m.toString()).toList(),
+    );
+  }
+
+  Future<bool> getIntervalAlertsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyIntervalAlertsEnabled) ?? true;
+  }
+
+  Future<void> setIntervalAlertsEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyIntervalAlertsEnabled, value);
+  }
+
+  /// Modo de repetición: 'repeatLast' o 'oncePerInterval'.
+  Future<String> getAlertRepeatMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyAlertRepeatMode) ?? 'repeatLast';
+  }
+
+  Future<void> setAlertRepeatMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _keyAlertRepeatMode,
+      mode == 'oncePerInterval' ? 'oncePerInterval' : 'repeatLast',
+    );
   }
 
   Future<void> setServerUrl(String url) async {

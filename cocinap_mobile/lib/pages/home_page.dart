@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../content/content.dart';
-import '../providers/server_provider.dart';
 import '../providers/standalone_provider.dart';
 import '../providers/tour_controller.dart';
 import '../widgets/graphical.dart';
-import 'dashboard_page.dart';
 
 /// Pantalla de inicio: dashboard gráfico con el estado del monitoreo,
 /// estadísticas, los objetivos de la app, cómo funciona y su información.
@@ -32,19 +30,17 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final lang = AppLocal.language;
     final standalone = context.watch<StandaloneProvider>();
-    final server = context.watch<ServerProvider>();
-    final connected = server.status == ConnectionStatus.connected;
 
     return Scaffold(
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            _header(context, lang, standalone, connected),
+            _header(context, lang, standalone),
             const SizedBox(height: 16),
             _hero(context, lang, standalone),
             const SizedBox(height: 16),
-            _stats(standalone, connected),
+            _stats(standalone),
             const SizedBox(height: 22),
             SectionTitle(icon: Icons.flag, text: HomeTexts.objectivesTitle(lang)),
             const SizedBox(height: 12),
@@ -54,20 +50,20 @@ class HomePage extends StatelessWidget {
             const SizedBox(height: 12),
             _howItWorks(lang),
             const SizedBox(height: 22),
-            _setup(context, lang, standalone, connected),
+            _setup(context, lang, standalone),
             const SizedBox(height: 22),
             _privacy(context, lang),
             const SizedBox(height: 14),
             _about(context, lang),
             const SizedBox(height: 20),
-            _actions(context, lang, standalone, server, connected),
+            _actions(context, lang, standalone),
           ],
         ),
       ),
     );
   }
 
-  Widget _header(BuildContext context, String lang, StandaloneProvider s, bool connected) {
+  Widget _header(BuildContext context, String lang, StandaloneProvider s) {
     final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -94,31 +90,6 @@ class HomePage extends StatelessWidget {
               Text(
                 HomeTexts.taglineOf(lang),
                 style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.7)),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: (connected ? Colors.green : Colors.grey).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: (connected ? Colors.green : Colors.grey).withValues(alpha: 0.5),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.computer, size: 14, color: connected ? Colors.green : Colors.grey),
-              const SizedBox(width: 5),
-              Text(
-                connected ? HomeTexts.connected(lang) : HomeTexts.disconnected(lang),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: connected ? Colors.green : Colors.grey,
-                ),
               ),
             ],
           ),
@@ -266,7 +237,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _stats(StandaloneProvider s, bool connected) {
+  Widget _stats(StandaloneProvider s) {
     return Column(
       children: [
         Row(
@@ -307,17 +278,6 @@ class HomePage extends StatelessWidget {
                 color: s.cameraActive ? Colors.teal : Colors.grey,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: IconStatTile(
-                icon: Icons.computer,
-                value: connected
-                    ? HomeTexts.connected(AppLocal.language)
-                    : HomeTexts.disconnected(AppLocal.language),
-                label: HomeTexts.statPc(AppLocal.language),
-                color: connected ? Colors.lightBlue : Colors.grey,
-              ),
-            ),
           ],
         ),
       ],
@@ -355,7 +315,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _setup(BuildContext context, String lang, StandaloneProvider s, bool connected) {
+  Widget _setup(BuildContext context, String lang, StandaloneProvider s) {
     final cameraDone = s.cameraSource == StandaloneCameraSource.phone ||
         s.cameraUrl.isNotEmpty;
     final rows = <Widget>[
@@ -375,13 +335,6 @@ class HomePage extends StatelessWidget {
         icon: Icons.language,
         label: HomeTexts.setupLanguage(lang),
         done: true,
-      ),
-      ChecklistRow(
-        icon: Icons.computer,
-        label: connected
-            ? HomeTexts.connected(lang)
-            : HomeTexts.disconnected(lang),
-        done: connected,
       ),
     ];
     final done = rows.where((r) => (r as ChecklistRow).done).length;
@@ -477,7 +430,7 @@ class HomePage extends StatelessWidget {
     final rows = <MapEntry<String, String>>[
       MapEntry(AppInfo.versionLabel(lang), "1.0.0"),
       MapEntry(AppInfo.techLabel(lang), "Flutter · Dart"),
-      MapEntry(AppInfo.modelLabel(lang), "SSD MobileNet V2"),
+      MapEntry(AppInfo.modelLabel(lang), "ML Kit Pose Detection"),
       MapEntry(AppInfo.privacyLabel(lang), AppInfo.privacyValue(lang)),
     ];
     return Container(
@@ -523,8 +476,6 @@ class HomePage extends StatelessWidget {
     BuildContext context,
     String lang,
     StandaloneProvider s,
-    ServerProvider server,
-    bool connected,
   ) {
     return Column(
       children: [
@@ -537,22 +488,6 @@ class HomePage extends StatelessWidget {
               s.timerRunning
                   ? HomeTexts.btnOpenMonitoring(lang)
                   : HomeTexts.btnStart(lang),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: connected
-                ? () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const DashboardPage()),
-                    )
-                : () => onOpenTab(2),
-            icon: Icon(connected ? Icons.videocam : Icons.qr_code_scanner),
-            label: Text(
-              connected ? HomeTexts.btnOpenPc(lang) : HomeTexts.btnConnectPc(lang),
             ),
           ),
         ),

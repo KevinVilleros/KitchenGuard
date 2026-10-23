@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'services/api_service.dart';
-import 'services/discovery_service.dart';
 import 'services/settings_service.dart';
 import 'services/background_service.dart';
-import 'providers/server_provider.dart';
-import 'providers/alarms_provider.dart';
 import 'providers/standalone_provider.dart';
 import 'providers/tour_controller.dart';
-import 'pages/discovery_page.dart';
-import 'pages/alarms_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/standalone_page.dart';
 import 'pages/onboarding_page.dart';
@@ -20,8 +14,6 @@ import 'content/content.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final api = ApiService("");
-  final discovery = DiscoveryService();
   final settings = SettingsService();
   final standalone = StandaloneProvider();
 
@@ -34,12 +26,9 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ServerProvider(api, discovery, settings)),
-        ChangeNotifierProvider(create: (_) => AlarmsProvider(api)),
         ChangeNotifierProvider(create: (_) => standalone),
         ChangeNotifierProvider(create: (_) => TourController()),
         Provider.value(value: settings),
-        Provider.value(value: api),
       ],
       child: const CocinaPApp(),
     ),
@@ -127,7 +116,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  static const int _destinationCount = 5;
+  static const int _destinationCount = 3;
 
   int _currentIndex = 0;
   final GlobalKey _navKey = GlobalKey();
@@ -183,16 +172,12 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final tour = context.watch<TourController>();
-    final server = context.watch<ServerProvider>();
     final standalone = context.watch<StandaloneProvider>();
-    final isConnected = server.status == ConnectionStatus.connected;
     final lang = AppLocal.language;
 
     final pages = [
       HomePage(onOpenTab: (i) => setState(() => _currentIndex = i)),
       const StandalonePage(),
-      const DiscoveryPage(),
-      const AlarmsPage(),
       const SettingsPage(),
     ];
 
@@ -216,15 +201,6 @@ class _MainShellState extends State<MainShell> {
                 icon: Icon(Icons.phone_android,
                     color: standalone.timerRunning ? Colors.orange : null),
                 label: NavLabels.monitoring(lang),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.qr_code_scanner),
-                label: NavLabels.connect(lang),
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.warning_amber,
-                    color: isConnected ? Colors.orange : null),
-                label: NavLabels.alarms(lang),
               ),
               NavigationDestination(
                 icon: const Icon(Icons.tune),

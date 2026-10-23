@@ -8,7 +8,6 @@ const _fgChannelName = 'CocinaP Monitor';
 const _alarmChannelId = 'cocinap_alarms';
 const _alarmChannelName = 'CocinaP Alarmas';
 const _notifId = 888;
-const _alarmNotifId = 889;
 
 final FlutterLocalNotificationsPlugin _notif = FlutterLocalNotificationsPlugin();
 
@@ -69,7 +68,7 @@ class BackgroundServiceManager {
         initialNotificationTitle: 'CocinaP',
         initialNotificationContent: 'Monitoreando cocina...',
         foregroundServiceNotificationId: _notifId,
-        foregroundServiceTypes: [AndroidForegroundType.dataSync],
+        foregroundServiceTypes: [AndroidForegroundType.dataSync, AndroidForegroundType.camera],
       ),
       iosConfiguration: IosConfiguration(
         onForeground: onStart,
@@ -103,8 +102,9 @@ class BackgroundServiceManager {
       fullScreenIntent: true,
     );
     const iosDetails = DarwinNotificationDetails();
+    final id = DateTime.now().millisecondsSinceEpoch % 100000;
     await _notif.show(
-      _alarmNotifId,
+      id,
       'CocinaP - Alarma',
       alert,
       const NotificationDetails(android: androidDetails, iOS: iosDetails),
@@ -157,8 +157,9 @@ void _showAlarmNotification(String alert) {
     fullScreenIntent: true,
   );
   const iosDetails = DarwinNotificationDetails();
+  final id = DateTime.now().millisecondsSinceEpoch % 100000;
   _notif.show(
-    _alarmNotifId,
+    id,
     'CocinaP - Alarma',
     alert,
     const NotificationDetails(android: androidDetails, iOS: iosDetails),
