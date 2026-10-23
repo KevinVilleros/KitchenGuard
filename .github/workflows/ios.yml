@@ -39,6 +39,14 @@ jobs:
             exit 1
           fi
 
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-build-log
+          path: /tmp/flutter_build.log
+          if-no-files-found: ignore
+
       - name: Package unsigned IPA
         run: |
           mkdir -p Payload
