@@ -120,6 +120,12 @@ class PersonDetector {
   }) async {
     if (!_loaded || _detector == null) return DetectionResult.empty;
     try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final input = _inputFromIosBgra(image);
+        if (input == null) return DetectionResult.empty;
+        return await _process(input, confidence);
+      }
+
       final nv21 = _cameraImageToNv21(image);
       if (nv21 == null) return DetectionResult.empty;
       final input =
@@ -323,6 +329,22 @@ class PersonDetector {
       }
     }
     return nv21;
+  }
+
+  InputImage? _inputFromIosBgra(CameraImage image) {
+    if (image.planes.isEmpty) return null;
+    final plane = image.planes.first;
+    if (plane.bytes.isEmpty || plane.bytesPerRow <= 0) return null;
+
+    return InputImage.fromBytes(
+      bytes: plane.bytes,
+      metadata: InputImageMetadata(
+        size: ui.Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: InputImageRotation.rotation0deg,
+        format: InputImageFormat.bgra8888,
+        bytesPerRow: plane.bytesPerRow,
+      ),
+    );
   }
 
   InputImage _inputFromNv21(

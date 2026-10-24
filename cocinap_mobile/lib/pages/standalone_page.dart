@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
@@ -134,12 +135,19 @@ class _StandalonePageState extends State<StandalonePage> {
   /// una que el dispositivo soporte. La cámara del móvil es el punto más
   /// frágil: distintas resoluciones y formatos pueden fallar con
   /// "No supported surface combination".
-  Future<CameraController?> _createController(CameraDescription camera) async {    const attempts = <(ResolutionPreset, ImageFormatGroup?)>[
-      (ResolutionPreset.low, ImageFormatGroup.yuv420),
-      (ResolutionPreset.low, null),
-      (ResolutionPreset.medium, ImageFormatGroup.yuv420),
-      (ResolutionPreset.medium, null),
-      (ResolutionPreset.high, null),
+  Future<CameraController?> _createController(CameraDescription camera) async {
+    final attempts = <(ResolutionPreset, ImageFormatGroup?)>[
+      if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+        (ResolutionPreset.low, ImageFormatGroup.bgra8888),
+        (ResolutionPreset.medium, ImageFormatGroup.bgra8888),
+        (ResolutionPreset.low, null),
+      ] else ...[
+        (ResolutionPreset.low, ImageFormatGroup.yuv420),
+        (ResolutionPreset.low, null),
+        (ResolutionPreset.medium, ImageFormatGroup.yuv420),
+        (ResolutionPreset.medium, null),
+        (ResolutionPreset.high, null),
+      ],
     ];
     for (final (preset, fmt) in attempts) {
       try {
