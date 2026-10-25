@@ -1,3 +1,4 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
@@ -18,6 +19,10 @@ class SettingsService {
   static const _keyIntervalAlertsEnabled = 'alert_intervals_enabled';
   static const _keyAlertRepeatMode = 'alert_repeat_mode';
   static const _maxRecents = 5;
+  static const _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+  );
 
   Future<String> getLanguage() async {
     final prefs = await SharedPreferences.getInstance();
@@ -35,13 +40,28 @@ class SettingsService {
   }
 
   Future<String> getApiKey() async {
+    final secureKey = await _secureStorage.read(key: _keyApiKey);
+    if (secureKey != null && secureKey.isNotEmpty) return secureKey;
+
+    // One-time migration from legacy SharedPreferences storage.
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyApiKey) ?? "";
+    final legacyKey = prefs.getString(_keyApiKey) ?? '';
+    if (legacyKey.isNotEmpty) {
+      await _secureStorage.write(key: _keyApiKey, value: legacyKey);
+      await prefs.remove(_keyApiKey);
+      return legacyKey;
+    }
+    return '';
   }
 
   Future<void> setApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyApiKey, key);
+    if (key.isEmpty) {
+      await _secureStorage.delete(key: _keyApiKey);
+    } else {
+      await _secureStorage.write(key: _keyApiKey, value: key);
+    }
+    await prefs.remove(_keyApiKey);
   }
 
   Future<int> getStandaloneDuration() async {

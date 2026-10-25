@@ -1,6 +1,6 @@
-# Guia de Contribucion
+# Guía de contribución
 
-Gracias por tu interes en contribuir a **CocinaP**. Este es un proyecto comercial
+Gracias por tu interés en contribuir a **CocinaP**. Este es un proyecto comercial
 y el codigo fuente no esta abierto a contribuciones externas sin autorizacion previa.
 
 ---

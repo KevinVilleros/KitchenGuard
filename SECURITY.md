@@ -45,14 +45,16 @@ Si encontraste una vulnerabilidad de seguridad en CocinaP:
 
 - La configuracion se almacena en `%APPDATA%\CocinaP/config.json`
 - Los logs de eventos estan en `%APPDATA%\CocinaP\logs\`
-- Los tokens FCM se almacenan localmente (encriptados por Android/iOS)
-- No se recopilan datos personales
+- El proyecto no depende actualmente de Firebase Cloud Messaging; las notificaciones son locales
+- Las preferencias movil se almacenan con SharedPreferences en el dispositivo
+- No se recopilan datos personales ni se ofrecen servicios configurados de telemetria
 
 ### Dependencias
 
-- Todas las dependencias se instalan via pip/pub con versiones fijadas
-- El modelo YOLO11n se descarga de Ultralytics (fuente verificada)
-- Firebase Admin SDK solo se usa si FCM esta habilitado
+- Las dependencias se gestionan mediante `pubspec.yaml` y `requirements.txt`
+- Las actualizaciones deben revisarse antes de publicar releases
+- El modelo YOLO11n se obtiene de Ultralytics cuando se utiliza el backend opcional
+- Firebase Cloud Messaging no forma parte actualmente de la app movil
 
 ---
 

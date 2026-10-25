@@ -9,6 +9,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/) y [Semantic Ve
 ## [1.0.2] - Unreleased
 
 ### Added
+- Complete bilingual documentation (ES/EN) under `docs/es/` and `docs/en/`:
+  architecture, installation, user guide, REST API, development, testing/CI,
+  security, troubleshooting, roadmap, glossary and ADRs.
+- `docs/README.md` documentation index.
+- Device/camera selector and connection tutorial in the Monitoring screen.
 - `qrcode[pil]` dependency for QR code generation in PC GUI
 - Unit tests with pytest (config, engine, analyzer, runner, package)
 - GitHub Actions CI workflow (lint + test matrix)
@@ -21,6 +26,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/) y [Semantic Ve
 - README.md complete rewrite with professional formatting
 - CONTRIBUTING.md improved with clearer guidelines
 - SECURITY.md improved with structured vulnerability reporting
+- Added explicit Android/iPhone platform support and QA documentation in Spanish and English
+- Added Android/iPhone artifact builds to GitHub Actions
+- Protected the API key with platform secure storage and one-time legacy migration
+- Clarified Firebase removal and local notification behavior in project documentation
 
 ---
 

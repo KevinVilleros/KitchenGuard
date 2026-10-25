@@ -1,7 +1,8 @@
-name: iOS Build CocinaP
+name: Mobile Builds CocinaP
 
-# Genera el .ipa para instalar la app en un iPhone.
-# - job "Build IPA (unsigned)": .ipa sin firmar para Sideloadly (recomendado).
+# Genera los artefactos móviles Android y iOS en la misma ejecución.
+# - job "Build APK (Android)": APK release listo para instalar.
+# - job "Build IPA (unsigned)": IPA sin firmar para Sideloadly.
 # - job "Build IPA (signed)": requiere secrets de certificado Apple (opcional).
 
 on:
@@ -94,6 +95,37 @@ jobs:
         with:
           name: CocinaP-iOS
           path: cocinap_mobile/CocinaP-unsigned.ipa
+          if-no-files-found: error
+
+  build-android:
+    name: Build APK (Android)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cocinap_mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CocinaP-Android
+          path: cocinap_mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
   build-signed:

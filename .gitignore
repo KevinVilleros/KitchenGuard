@@ -66,6 +66,10 @@ cocinap_mobile/ios/Pods/
 cocinap_mobile/ios/.symlinks/
 cocinap_mobile/ios/Flutter/Flutter.framework
 cocinap_mobile/ios/Flutter/App.framework
+*.ipa
+*.apk
+CocinaP-*.zip
+CocinaP-iOS-unzipped/
 
 # ─── Firebase ────────────────────────────────
 cocinap_mobile/android/app/google-services.json

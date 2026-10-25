@@ -43,17 +43,18 @@ configuración de forma remota.
 | **Bilingüe** | Español e inglés |
 | **Android + iOS** | Un mismo código para las dos plataformas |
 
-## Requisitos
+## Requisitos y soporte
 
-### Android
-- Android 8.0+ (API 26+)
+| Plataforma | Requisito | Estado actual |
+|---|---|---|
+| Android | Android 8.0+ (API 26+) | Código y configuración preparados; requiere validación manual de cada release |
+| iOS / iPhone | iOS 17.0+ | Build automatizado disponible; requiere validación e instalación en un dispositivo real |
+| PC conectado | Windows 10/11 y Python 3.10+ | Backend opcional; modo de escritorio archivado |
+| Red | WiFi en la misma subred | Solo necesario para el modo conectado al PC |
 
-### iOS
-- iOS 17.0+
-- Compilación/firma: ver [Guía de instalación iOS desde Windows](docs/INSTALL_IOS_WINDOWS.es.md)
+La compilación en iOS requiere macOS/Xcode o el workflow de GitHub Actions. La distribución mediante Sideloadly no sustituye las pruebas funcionales ni la validación de permisos, cámara y red en un iPhone.
 
-### Red
-- WiFi en la misma subred que la PC (solo para el modo conectado)
+Compilación/firma: ver [Guía de instalación iOS desde Windows](docs/INSTALL_IOS_WINDOWS.es.md).
 
 ## Inicio rápido
 
@@ -110,14 +111,27 @@ KitchenGuard/
 
 ## Documentación
 
+Toda la documentación está en [`docs/`](docs/README.md), en **español** (`docs/es/`)
+e **inglés** (`docs/en/`).
+
 | Documento | Descripción |
 |---|---|
+| [Índice de documentación](docs/README.md) | Punto de entrada a toda la documentación |
+| [Arquitectura](docs/es/ARCHITECTURE.md) | Componentes, flujo de datos y diagramas |
+| [Instalación y compilación](docs/es/INSTALLATION.md) | Requisitos y build Android/iOS/PC |
+| [Manual de usuario](docs/es/USER_GUIDE.md) | Guía completa de uso |
+| [Referencia de API REST](docs/es/API.md) | Endpoints del backend |
+| [Guía de desarrollo](docs/es/DEVELOPMENT.md) | Entorno y convenciones |
+| [Pruebas y CI/CD](docs/es/TESTING.md) | Estrategia de pruebas y workflows |
+| [Seguridad](docs/es/SECURITY.md) | Modelo de seguridad y buenas prácticas |
+| [Solución de problemas](docs/es/TROUBLESHOOTING.md) | Errores frecuentes (FAQ) |
+| [Roadmap](docs/es/ROADMAP.md) · [Glosario](docs/es/GLOSSARY.md) · [ADR](docs/es/decisions/README.md) | Planificación, términos y decisiones |
 | [Instalación iOS desde Windows](docs/INSTALL_IOS_WINDOWS.es.md) | Compilar en la nube e instalar con Sideloadly |
 | [Política de privacidad](docs/legal/PRIVACY_POLICY.es.md) | Privacidad y procesamiento local |
 | [Backend YOLO](yolo/README.md) | Backend Python/YOLO archivado |
 | [Changelog](CHANGELOG.md) | Historial de versiones |
 | [Contribuir](CONTRIBUTING.md) | Guía para colaboradores |
-| [Seguridad](SECURITY.md) | Reporte de vulnerabilidades |
+| [Seguridad (reporte)](SECURITY.md) | Reporte de vulnerabilidades |
 
 ## Privacidad
 

@@ -1,6 +1,15 @@
-# CocinaP Mobile — App de Monitoreo de Cocina
+# CocinaP Mobile — App de monitoreo de cocina
 
-App compañera (Android e iOS) para el sistema CocinaP de seguridad en la cocina.
+Aplicación móvil Flutter compatible con Android y iOS para el sistema de seguridad CocinaP.
+
+## Estado de plataforma
+
+| Plataforma | Estado |
+|---|---|
+| Android | Implementada y distribuible como APK/AAB. Requiere pruebas de instalación y permisos por dispositivo y release. |
+| iOS / iPhone | Implementada con build de CI y configuración de permisos. Requiere compilación firmada o `.ipa` y validación física en iPhone. |
+
+La compatibilidad de código, un workflow de CI y una configuración de plataforma no reemplazan una matriz de pruebas en dispositivos reales.
 
 ## Características
 
