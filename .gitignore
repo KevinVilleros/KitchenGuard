@@ -71,6 +71,14 @@ cocinap_mobile/ios/Flutter/App.framework
 CocinaP-*.zip
 CocinaP-iOS-unzipped/
 
+# ─── Herramientas locales de IA ───────────────
+.opencode/
+.copilot/
+.cursor/
+.windsurf/
+.claude/
+.aider/
+
 # ─── Firebase ────────────────────────────────
 cocinap_mobile/android/app/google-services.json
 cocinap_mobile/ios/Runner/GoogleService-Info.plist
