@@ -17,7 +17,7 @@ dependencies:
   flutter_background_service: ^5.0.0
   flutter_background_service_android: ^6.0.0
   flutter_background_service_ios: ^5.0.0
-  camera: ^0.11.0
+  camera: ^0.12.1
   google_mlkit_pose_detection: ^0.16.1
   path_provider: ^2.1.0
   image: ^4.2.0
