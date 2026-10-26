@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../content/content.dart';
 
 /// Fuente de video del modo independiente.
 enum StandaloneCameraSource {
@@ -135,10 +136,14 @@ class StandaloneProvider extends ChangeNotifier {
     return ((total - _remainingSeconds) / total).clamp(0.0, 1.0).toDouble();
   }
 
-  String get cameraSourceLabel => switch (_cameraSource) {
-        StandaloneCameraSource.phone => "Cámara del móvil",
-        StandaloneCameraSource.ipCamera => "Cámara IP (hogar/seguridad)",
-      };
+  String get cameraSourceLabel {
+    switch (_cameraSource) {
+      case StandaloneCameraSource.phone:
+        return AppLocal.language == "en" ? "Phone camera" : "Cámara del móvil";
+      case StandaloneCameraSource.ipCamera:
+        return AppLocal.language == "en" ? "IP camera (home/security)" : "Cámara IP (hogar/seguridad)";
+    }
+  }
 
   /// Número de alertas de intervalo ya emitidas en el ciclo actual.
   int get firedIntervalCount => _firedIntervals.length;
@@ -416,12 +421,19 @@ class StandaloneProvider extends ChangeNotifier {
   }
 
   String get statusText {
-    if (!_timerRunning) return "Inicia el tiempo de monitoreo";
-    if (_timerPaused) return "Monitoreo en PAUSA";
-    if (!_cameraActive) return "Iniciando cámara...";
-    if (_personPresent) return "Persona detectada - cocina atendida";
+    final lang = AppLocal.language;
+    if (!_timerRunning) {
+      return lang == "en" ? "Start the monitoring timer" : "Inicia el tiempo de monitoreo";
+    }
+    if (_timerPaused) return lang == "en" ? "Monitoring PAUSED" : "Monitoreo en PAUSA";
+    if (!_cameraActive) return lang == "en" ? "Starting camera..." : "Iniciando cámara...";
+    if (_personPresent) {
+      return lang == "en" ? "Person detected - kitchen attended" : "Persona detectada - cocina atendida";
+    }
     final m = absenceMinutes;
-    return "SIN PERSONA DETECTADA (${m.toStringAsFixed(1)} min)";
+    return lang == "en"
+        ? "NO PERSON DETECTED (${m.toStringAsFixed(1)} min)"
+        : "SIN PERSONA DETECTADA (${m.toStringAsFixed(1)} min)";
   }
 
   void triggerAlert(String message) {

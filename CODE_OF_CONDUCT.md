@@ -1,32 +1,29 @@
-# Código de Conducta
+# Code of Conduct
 
-## Nuestro Compromiso
+## Our commitment
 
-Con el objetivo de fomentar un entorno abierto y acogedor, nos comprometemos
-a hacer de la participación en nuestro proyecto y nuestra comunidad una
-experiencia libre de acoso para todos, independientemente de la edad,
-complexión física, discapacidad, etnia, identidad y expresión de género,
-nivel de experiencia, nacionalidad, apariencia personal, raza, religión,
-o identidad y orientación sexual.
+We are committed to making participation in CocinaP a respectful, welcoming and
+inclusive experience, regardless of age, body size, visible or invisible
+disability, ethnicity, gender identity or expression, experience level,
+nationality, personal appearance, race, religion, sexual identity or orientation.
 
-## Estándares
+## Standards
 
-Ejemplos de comportamiento que contribuyen a crear un entorno positivo:
+Examples of positive behavior include:
 
-- Usar un lenguaje acogedor e inclusivo
-- Ser respetuoso con diferentes puntos de vista y experiencias
-- Aceptar críticas constructivas
-- Centrarse en lo que es mejor para la comunidad
+- Using welcoming and inclusive language.
+- Respecting different viewpoints and experiences.
+- Accepting constructive feedback professionally.
+- Focusing on what is best for the project and its users.
 
-Ejemplos de comportamiento inaceptable:
+Unacceptable behavior includes:
 
-- El uso de lenguaje o imágenes sexualizadas
-- Comentarios despectivos, insultantes o ataques personales
-- Acoso público o privado
-- Publicación de información privada sin permiso explícito
+- Sexualized language or imagery.
+- Insulting, defamatory or personal attacks.
+- Public or private harassment.
+- Publishing private information without explicit permission.
 
-## Aplicación
+## Enforcement
 
-Los mantenedores del proyecto se reservan el derecho de eliminar, editar o
-rechazar comentarios, commits, código, ediciones de wiki, issues y otras
-contribuciones que no estén alineadas con este Código de Conducta.
+Project maintainers may remove, edit or reject comments, commits, issues, wiki
+changes and contributions that do not follow this Code of Conduct.

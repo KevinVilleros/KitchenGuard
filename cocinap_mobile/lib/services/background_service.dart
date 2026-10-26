@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../content/content.dart';
 
 const _fgChannelId = 'cocinap_foreground';
 const _fgChannelName = 'CocinaP Monitor';
@@ -46,7 +47,9 @@ class BackgroundServiceManager {
           const AndroidNotificationChannel(
             _fgChannelId,
             _fgChannelName,
-            description: 'Notificacion de servicio en primer plano',
+            description: AppLocal.language == 'en'
+                ? 'Foreground monitoring service'
+                : 'Notificacion de servicio en primer plano',
             importance: Importance.low,
           ),
         );
@@ -59,7 +62,9 @@ class BackgroundServiceManager {
           const AndroidNotificationChannel(
             _alarmChannelId,
             _alarmChannelName,
-            description: 'Alertas y alarmas de seguridad',
+            description: AppLocal.language == 'en'
+                ? 'Security alerts and alarms'
+                : 'Alertas y alarmas de seguridad',
             importance: Importance.high,
             playSound: true,
             enableVibration: true,
@@ -75,7 +80,9 @@ class BackgroundServiceManager {
         isForegroundMode: true,
         notificationChannelId: _fgChannelId,
         initialNotificationTitle: 'CocinaP',
-        initialNotificationContent: 'Monitoreando cocina...',
+        initialNotificationContent: AppLocal.language == 'en'
+            ? 'Monitoring kitchen...'
+            : 'Monitoreando cocina...',
         foregroundServiceNotificationId: _notifId,
         foregroundServiceTypes: [AndroidForegroundType.dataSync, AndroidForegroundType.camera],
       ),
@@ -98,7 +105,9 @@ class BackgroundServiceManager {
       await service.startService();
     }
     service.invoke('updateStatus', {
-      'status': 'Monitoreo activo: ${remainingSeconds ~/ 60} min'
+      'status': AppLocal.language == 'en'
+          ? 'Monitoring active: ${remainingSeconds ~/ 60} min'
+          : 'Monitoreo activo: ${remainingSeconds ~/ 60} min'
     });
   }
 
@@ -130,15 +139,19 @@ class BackgroundServiceManager {
 
   static Future<void> sendTestAlarm() async {
     await _showAlarmNotification(
-      'Prueba de alerta: sonido y vibración activos.',
+      AppLocal.language == 'en'
+          ? 'Test alert: sound and vibration are active.'
+          : 'Prueba de alerta: sonido y vibración activos.',
     );
   }
 
   static Future<void> _showAlarmNotification(String alert) async {
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       _alarmChannelId,
       _alarmChannelName,
-      channelDescription: 'Alertas y alarmas de seguridad',
+      channelDescription: AppLocal.language == 'en'
+          ? 'Security alerts and alarms'
+          : 'Alertas y alarmas de seguridad',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
@@ -149,9 +162,9 @@ class BackgroundServiceManager {
     final id = DateTime.now().millisecondsSinceEpoch % 100000;
     await _notif.show(
       id,
-      'CocinaP - Alarma',
+      AppLocal.language == 'en' ? 'CocinaP - Alarm' : 'CocinaP - Alarma',
       alert,
-      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
     );
   }
 }
@@ -163,7 +176,9 @@ void onStart(ServiceInstance service) {
   if (service is AndroidServiceInstance) {
     service.setForegroundNotificationInfo(
       title: 'CocinaP',
-      content: 'Monitoreando cocina...',
+      content: AppLocal.language == 'en'
+          ? 'Monitoring kitchen...'
+          : 'Monitoreando cocina...',
     );
   }
 
@@ -190,10 +205,12 @@ void onStart(ServiceInstance service) {
 }
 
 void _showAlarmNotification(String alert) {
-  const androidDetails = AndroidNotificationDetails(
+  final androidDetails = AndroidNotificationDetails(
     _alarmChannelId,
     _alarmChannelName,
-    channelDescription: 'Alertas y alarmas de seguridad',
+    channelDescription: AppLocal.language == 'en'
+        ? 'Security alerts and alarms'
+        : 'Alertas y alarmas de seguridad',
     importance: Importance.high,
     priority: Priority.high,
     playSound: true,
@@ -204,8 +221,8 @@ void _showAlarmNotification(String alert) {
   final id = DateTime.now().millisecondsSinceEpoch % 100000;
   _notif.show(
     id,
-    'CocinaP - Alarma',
+    AppLocal.language == 'en' ? 'CocinaP - Alarm' : 'CocinaP - Alarma',
     alert,
-    const NotificationDetails(android: androidDetails, iOS: iosDetails),
+    NotificationDetails(android: androidDetails, iOS: iosDetails),
   );
 }

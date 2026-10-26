@@ -1,29 +1,13 @@
-# Documentación de CocinaP
+# CocinaP Documentation
 
-Índice central de la documentación del proyecto **CocinaP** (aplicación móvil
-Flutter + backend Python/YOLO). Toda la documentación está disponible en
-**español** (`docs/es/`) e **inglés** (`docs/en/`).
+Central documentation index for **CocinaP** (Flutter mobile application and
+optional Python/YOLO backend). Documentation is available in **English**
+(`docs/en/`) and **Spanish** (`docs/es/`). English is the repository-wide
+default.
 
 ---
 
-## Índice por idioma
-
-### Español
-
-| Documento | Descripción |
-|---|---|
-| [Arquitectura](es/ARCHITECTURE.md) | Visión general, componentes, flujo de datos y diagramas |
-| [Instalación y compilación](es/INSTALLATION.md) | Requisitos, entorno, build Android/iOS y ejecución del backend |
-| [Manual de usuario](es/USER_GUIDE.md) | Guía completa de uso de la app y del sistema |
-| [Referencia de API REST](es/API.md) | Endpoints, autenticación y ejemplos del backend |
-| [Guía de desarrollo](es/DEVELOPMENT.md) | Entorno, convenciones, estructura y flujo de trabajo |
-| [Soporte de plataformas](es/PLATFORM_SUPPORT.md) | Android, iPhone/iOS, matriz de QA y criterios de release |
-| [Pruebas y CI/CD](es/TESTING.md) | Estrategia de pruebas, workflows y releases |
-| [Seguridad](es/SECURITY.md) | Modelo de amenazas, auth, rate limiting y buenas prácticas |
-| [Solución de problemas](es/TROUBLESHOOTING.md) | Errores frecuentes y cómo resolverlos (FAQ) |
-| [Roadmap](es/ROADMAP.md) | Funcionalidades planificadas y estado |
-| [Glosario](es/GLOSSARY.md) | Términos, siglas y conceptos del dominio |
-| [Decisiones de arquitectura (ADR)](es/decisions/) | Registros de decisiones técnicas |
+## Documentation by language
 
 ### English
 
@@ -42,29 +26,47 @@ Flutter + backend Python/YOLO). Toda la documentación está disponible en
 | [Glossary](en/GLOSSARY.md) | Domain terms, acronyms and concepts |
 | [Architecture decisions (ADR)](en/decisions/) | Technical decision records |
 
+### Spanish
+
+| Documento | Descripción |
+|---|---|
+| [Arquitectura](es/ARCHITECTURE.md) | Visión general, componentes, flujo de datos y diagramas |
+| [Instalación y compilación](es/INSTALLATION.md) | Requisitos, entorno, build Android/iOS y ejecución del backend |
+| [Manual de usuario](es/USER_GUIDE.md) | Guía completa de uso de la app y del sistema |
+| [Referencia de API REST](es/API.md) | Endpoints, autenticación y ejemplos del backend |
+| [Guía de desarrollo](es/DEVELOPMENT.md) | Entorno, convenciones, estructura y flujo de trabajo |
+| [Soporte de plataformas](es/PLATFORM_SUPPORT.md) | Android, iPhone/iOS, matriz de QA y criterios de release |
+| [Pruebas y CI/CD](es/TESTING.md) | Estrategia de pruebas, workflows y releases |
+| [Seguridad](es/SECURITY.md) | Modelo de amenazas, auth, rate limiting y buenas prácticas |
+| [Solución de problemas](es/TROUBLESHOOTING.md) | Errores frecuentes y cómo resolverlos (FAQ) |
+| [Roadmap](es/ROADMAP.md) | Funcionalidades planificadas y estado |
+| [Glosario](es/GLOSSARY.md) | Términos, siglas y conceptos del dominio |
+| [Decisiones de arquitectura (ADR)](es/decisions/) | Registros de decisiones técnicas |
+
 ---
 
-## Documentos en la raíz del repositorio
+## Repository root documents
 
-| Documento | Idioma | Descripción |
+| Document | Language | Description |
 |---|---|---|
-| [README.md](../README.md) | ES | Presentación del proyecto |
-| [CHANGELOG.md](../CHANGELOG.md) | ES | Historial de versiones |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | ES | Guía de contribución |
-| [SECURITY.md](../SECURITY.md) | ES | Política de reporte de vulnerabilidades |
-| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | ES | Código de conducta |
-| [LICENSE](../LICENSE) | ES | Licencia comercial |
-| [docs/legal/](legal/) | ES/EN | Política de privacidad |
-| [INSTALL_IOS_WINDOWS.es.md](INSTALL_IOS_WINDOWS.es.md) | ES | Compilar iOS desde Windows con GitHub Actions |
-| [yolo/README.md](../yolo/README.md) | ES | Backend Python/YOLO |
+| [README.md](../README.md) | EN | Project overview |
+| [CHANGELOG.md](../CHANGELOG.md) | EN | Release history |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | EN | Contribution policy |
+| [SECURITY.md](../SECURITY.md) | EN | Vulnerability reporting policy |
+| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | EN | Community standards |
+| [LICENSE](../LICENSE) | EN/ES | Commercial license |
+| [Privacy policy](legal/PRIVACY_POLICY.en.md) | EN + ES | Local-processing privacy policy |
+| [iOS from Windows](INSTALL_IOS_WINDOWS.es.md) | Spanish | Build and install with GitHub Actions |
+| [Mobile app README](../cocinap_mobile/README.md) | EN + ES | Android and iPhone app |
+| [Archived YOLO backend](../yolo/README.md) | EN + ES | Optional Python/Windows backend |
 
 ---
 
-## Convenciones
+## Conventions
 
-- **Idiomas:** cada documento tiene su versión `es/` y `en/`. La versión en
-  español es la de referencia.
-- **Formato:** Markdown. Los diagramas usan bloques de código ASCII o Mermaid.
-- **Actualización:** al cambiar el comportamiento del software, actualiza la
-  documentación correspondiente y el [CHANGELOG](../CHANGELOG.md).
-- **Sin emojis:** la documentación del proyecto no usa emojis.
+- **Languages:** English is the repository-wide primary language. Spanish is
+  available under `docs/es/` and optional `.es.md` entry documents.
+- **Format:** Markdown, with ASCII or Mermaid diagrams when needed.
+- **Updates:** when behavior changes, update the matching English and Spanish
+  documentation and [CHANGELOG.md](../CHANGELOG.md).
+- **Style:** do not use emojis in project documentation.

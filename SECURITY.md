@@ -1,69 +1,65 @@
-# Politica de Seguridad
+# Security Policy
 
-## Versiones Soportadas
+## Supported versions
 
-| Version | Soportada |
+| Version | Supported |
 |---|---|
-| 1.0.x | Si |
+| 1.0.x | Yes |
 
----
+## Report a vulnerability
 
-## Reportar Vulnerabilidades
+Use GitHub private vulnerability reporting when enabled. Do not publish secrets,
+proofs of concept, personal data or exploit details in public issues.
 
-Si encontraste una vulnerabilidad de seguridad en CocinaP:
+Otherwise, contact the repository owner privately by email:
+**kevinvilleros77@gmail.com**.
 
-1. **No la reportes en GitHub Issues** (es publico)
-2. Envia un email a **kevinvilleros77@gmail.com** con:
-   - Descripcion detallada del problema
-   - Pasos para reproducirlo
-   - Prueba de concepto si es posible
-   - Version afectada
-3. Recibiras confirmacion dentro de **48 horas**
+Include:
 
-### Proceso de Resolucion
+- Affected version and platform.
+- Reproduction steps.
+- Impact and expected severity.
+- Proof of concept only if necessary and safe to share privately.
 
-| Fase | Tiempo estimado |
+Target response:
+
+| Phase | Target |
 |---|---|
-| Confirmacion del reporte | 48 horas |
-| Evaluacion de impacto | 1 semana |
-| Desarrollo del fix | 1-2 semanas |
-| Testing y release | 1 semana |
-| Notificacion al reportero | Al publicar el fix |
+| Initial acknowledgement | 48 hours |
+| Impact assessment | 7 days |
+| Fix development | 1-2 weeks |
+| Coordinated release | Agreed with reporter |
 
----
+## Security design
 
-## Diseno de Seguridad
+### Network
 
-### Red
+- The web server is intended for a trusted home LAN.
+- Do not expose port `8080` to the Internet.
+- Use a VPN or equivalent controlled connection for remote access.
+- mDNS discovery works only on the local subnet.
 
-- El servidor web esta disenado para uso exclusivo en **red LAN confiable**
-- **No exponer** el puerto 8080 a Internet
-- Usar VPN (WireGuard/OpenVPN) para acceso remoto
-- Auto-descubrimiento mDNS solo funciona en la subred local
+### Data and credentials
 
-### Datos
+- Configuration is stored under `%APPDATA%\CocinaP/config.json` on the PC.
+- Event logs are stored under `%APPDATA%\CocinaP\logs\`.
+- Non-sensitive mobile preferences use SharedPreferences.
+- The API key is stored in Android Keystore/EncryptedSharedPreferences and iOS
+  Keychain through secure storage.
+- Legacy API keys are migrated once and removed from ordinary preferences.
+- There is no configured cloud telemetry or image upload.
 
-- La configuracion se almacena en `%APPDATA%\CocinaP/config.json`
-- Los logs de eventos estan en `%APPDATA%\CocinaP\logs\`
-- El proyecto no depende actualmente de Firebase Cloud Messaging; las notificaciones son locales
-- Las preferencias no sensibles se almacenan con SharedPreferences en el dispositivo
-- La API key se almacena en Keystore/EncryptedSharedPreferences en Android y en Keychain en iOS
-- Las claves heredadas se migran una vez desde SharedPreferences y luego se eliminan
-- No se recopilan datos personales ni se ofrecen servicios configurados de telemetria
+### Dependencies
 
-### Dependencias
+- Flutter dependencies use `pubspec.yaml`; Python dependencies use
+  `requirements.txt` and `pyproject.toml`.
+- Update dependencies through reviewed Dependabot pull requests.
+- Firebase Cloud Messaging is not part of the current mobile app.
 
-- Las dependencias se gestionan mediante `pubspec.yaml` y `requirements.txt`
-- Las actualizaciones deben revisarse antes de publicar releases
-- El modelo YOLO11n se obtiene de Ultralytics cuando se utiliza el backend opcional
-- Firebase Cloud Messaging no forma parte actualmente de la app movil
+## Operational practices
 
----
-
-## Buenas Practicas
-
-- Mantener Windows y el antivirus actualizados
-- Revisar periodicamente los logs en `%APPDATA%\CocinaP\logs\`
-- No ejecutar el servidor como administrador sin necesidad
-- Usar firewall de Windows para limitar acceso al puerto 8080
-- Actualizar CocinaP cuando haya nuevas versiones disponibles
+- Keep Windows, Android, iOS and Flutter/Android toolchains updated.
+- Do not run the server as an administrator without a specific reason.
+- Restrict port `8080` with the Windows firewall.
+- Review security logs if unusual activity is observed.
+- Keep backups outside the application directory where appropriate.

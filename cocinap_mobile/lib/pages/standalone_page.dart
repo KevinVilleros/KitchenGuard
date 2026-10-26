@@ -307,38 +307,42 @@ class _StandalonePageState extends State<StandalonePage> {
     final minutesCtrl = TextEditingController(text: "${standalone.durationMinutes}");
     final minutes = await showDialog<int>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Iniciar monitoreo"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: minutesCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Minutos de monitoreo (1-240)",
-                border: OutlineInputBorder(),
+      builder: (ctx) {
+        final lang = AppLocal.language;
+        String l(String es, String en) => lang == "en" ? en : es;
+        return AlertDialog(
+          title: Text(l("Iniciar monitoreo", "Start monitoring")),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: minutesCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: l("Minutos de monitoreo (1-240)", "Monitoring minutes (1-240)"),
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              "Se vigila la cocina. Si NO se detecta una persona, "
-              "se enviara una alerta.",
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              const SizedBox(height: 12),
+              Text(
+                l("Se vigila la cocina. Si NO se detecta una persona, se enviará una alerta.",
+                  "The kitchen is monitored. If NO person is detected, an alert will be sent."),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l("Cancelar", "Cancel"))),
+            ElevatedButton(
+              onPressed: () {
+                final v = int.tryParse(minutesCtrl.text) ?? 30;
+                Navigator.pop(ctx, v);
+              },
+              child: Text(l("Iniciar", "Start")),
             ),
           ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
-          ElevatedButton(
-            onPressed: () {
-              final v = int.tryParse(minutesCtrl.text) ?? 30;
-              Navigator.pop(ctx, v);
-            },
-            child: const Text("Iniciar"),
-          ),
-        ],
-      ),
+        );
+      },
     );
     if (minutes != null && minutes > 0) {
       standalone.startTimer(minutes: minutes);
@@ -403,7 +407,9 @@ class _StandalonePageState extends State<StandalonePage> {
                         child: Padding(
                           padding: EdgeInsets.all(20),
                           child: Text(
-                            "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos.",
+                            AppLocal.language == "en"
+                                ? "Could not access the camera.\nCheck the connection and permissions."
+                                : "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos.",
                             style: TextStyle(color: Colors.white),
                             textAlign: TextAlign.center,
                           ),
@@ -641,8 +647,12 @@ class _StandalonePageState extends State<StandalonePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Text(
               standalone.cameraSource == StandaloneCameraSource.ipCamera
-                  ? "Usando cámara IP · ${standalone.cameraSourceLabel}"
-                  : "Usando cámara del móvil",
+                  ? (AppLocal.language == "en"
+                      ? "Using IP camera · ${standalone.cameraSourceLabel}"
+                      : "Usando cámara IP · ${standalone.cameraSourceLabel}")
+                  : (AppLocal.language == "en"
+                      ? "Using phone camera"
+                      : "Usando cámara del móvil"),
               style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
               textAlign: TextAlign.center,
             ),
@@ -655,12 +665,19 @@ class _StandalonePageState extends State<StandalonePage> {
   /// Texto que indica la próxima alerta programada o las ya emitidas.
   String _nextAlertLabel(StandaloneProvider standalone) {
     final intervals = standalone.sortedIntervals;
-    if (intervals.isEmpty) return "Sin intervalos de alerta configurados";
+    final lang = AppLocal.language;
+    if (intervals.isEmpty) {
+      return lang == "en" ? "No alert intervals configured" : "Sin intervalos de alerta configurados";
+    }
     final fired = standalone.firedIntervalCount;
     if (fired < intervals.length) {
-      return "Próxima alerta a los ${intervals[fired]} min sin persona";
+      return lang == "en"
+          ? "Next alert after ${intervals[fired]} min without a person"
+          : "Próxima alerta a los ${intervals[fired]} min sin persona";
     }
-    return "Todas las alertas emitidas (última: ${intervals.last} min)";
+    return lang == "en"
+        ? "All alerts emitted (last: ${intervals.last} min)"
+        : "Todas las alertas emitidas (última: ${intervals.last} min)";
   }
 
   /// Muestra la hoja inferior con los dispositivos/cámaras disponibles,
@@ -686,8 +703,10 @@ class _LiveBadge extends StatelessWidget {
         ? Colors.grey
         : (personPresent ? Colors.greenAccent : Colors.orangeAccent);
     final label = !active
-        ? "SIN SEÑAL"
-        : (personPresent ? "EN VIVO" : "SIN PERSONA");
+        ? (AppLocal.language == "en" ? "NO SIGNAL" : "SIN SEÑAL")
+        : (personPresent
+            ? (AppLocal.language == "en" ? "LIVE" : "EN VIVO")
+            : (AppLocal.language == "en" ? "NO PERSON" : "SIN PERSONA"));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(

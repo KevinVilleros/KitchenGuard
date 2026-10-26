@@ -19,7 +19,7 @@ class _HelpPageState extends State<HelpPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Ayuda e información"),
+        title: Text(AppLocal.language == "en" ? "Help & information" : "Ayuda e información"),
         actions: [
           IconButton(
             tooltip: "Idioma / Language",
@@ -33,10 +33,10 @@ class _HelpPageState extends State<HelpPage> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text("Manual")),
-                ButtonSegment(value: 1, label: Text("Guía de cámaras")),
-                ButtonSegment(value: 2, label: Text("Términos")),
+              segments: [
+                ButtonSegment(value: 0, label: Text(AppLocal.language == "en" ? "Manual" : "Manual")),
+                ButtonSegment(value: 1, label: Text(AppLocal.language == "en" ? "Camera guide" : "Guía de cámaras")),
+                ButtonSegment(value: 2, label: Text(AppLocal.language == "en" ? "Terms" : "Términos")),
               ],
               selected: {_section},
               onSelectionChanged: (s) => setState(() => _section = s.first),

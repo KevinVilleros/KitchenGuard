@@ -1,94 +1,66 @@
-# Guía de contribución
+# Contributing to CocinaP
 
-Gracias por tu interés en contribuir a **CocinaP**. Este es un proyecto comercial
-y el codigo fuente no esta abierto a contribuciones externas sin autorizacion previa.
+CocinaP is commercial software. Source code and contributions are restricted to
+people or entities with prior written authorization.
 
----
+## Reporting issues
 
-## Reportar Issues
+Before opening an issue:
 
-Si encontraste un bug o tenes una sugerencia:
+1. Search [GitHub Issues](https://github.com/KevinVilleros/KitchenGuard/issues).
+2. Use a bug-report or feature-request template when one is available.
+3. Include the CocinaP version, operating system, reproduction steps, relevant
+   logs and screenshots when useful.
 
-1. Verifica que el issue no exista ya en [GitHub Issues](https://github.com/KevinVilleros/KitchenGuard/issues)
-2. Usa la plantilla de bug report o feature request
-3. Incluye:
-   - Version de CocinaP (se ve en Acerca de)
-   - Sistema operativo (Windows 10/11)
-   - Pasos para reproducir el bug
-   - Logs de error (en `%APPDATA%\CocinaP\logs\crash.log`)
-   - Capturas de pantalla si aplica
+Do not publish API keys, passwords, personal data or other credentials.
 
----
+## Development process
 
-## Proceso de Desarrollo
+Authorized contributors should:
 
-1. Fork del repositorio (solo para contributors autorizados)
-2. Crear rama: `git checkout -b feature/nombre-corto`
-3. Commits con mensajes descriptivos en espanol
-4. Hacer lint del codigo antes de commit:
+1. Fork or create a descriptive branch according to repository permissions.
+2. Keep commits small and use imperative Conventional Commit prefixes such as
+   `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:` or `ci:`.
+3. Run static analysis and relevant tests before opening a pull request.
+4. Describe the behavior changed, the validation performed and any limitations.
 
 ```bash
-# Python
-ruff check cocinap/
-ruff format cocinap/
+cd cocinap_mobile
+flutter analyze
+flutter test
 
-# Flutter
-cd cocinap_mobile && flutter analyze
-```
-
-5. Ejecutar tests:
-
-```bash
+cd ../yolo
+ruff check .
+ruff format --check .
 pytest
 ```
 
-6. Crear Pull Request a la rama `develop`
-
----
-
-## Estandares de Codigo
+## Code standards
 
 ### Python
 
-- **Style:** PEP 8, enforced by Ruff
-- **Line length:** 120 characters max
-- **Type hints:** required on all public functions
-- **Naming:** English for code, Spanish for UI/user-facing strings
-- **Tests:** pytest, one test file per module in `tests/`
+- Follow Ruff and PEP 8 conventions.
+- Keep public functions type annotated where practical.
+- Use English identifiers and comments.
+- Keep one focused pytest suite per module or behavior.
 
-### Flutter / Dart
+### Flutter and Dart
 
-- **Linting:** `flutter_lints` configurado
-- **State management:** Provider (no BLoC)
-- **Naming:** English for code, Spanish for UI
+- Follow the configured `flutter_lints` rules.
+- Use Provider for the existing state-management pattern unless a larger design
+  decision changes it.
+- Use English identifiers and comments; user-facing text belongs in bilingual
+  `content.dart` strings.
+- Format and analyze changed files before committing.
 
----
+## Commit example
 
-## Estructura de Commits
-
-```
-<tipo>: <descripcion corta en espanol>
-
-Tipos:
-  feat     Nueva funcionalidad
-  fix      Correccion de bug
-  docs     Documentacion
-  style    Formato (sin cambio de logica)
-  refactor Refactorizacion
-  test     Tests
-  build    Build o dependencias
-  ci       Configuracion de CI
+```text
+feat: add smoke alert notification
+fix: correct unattended-kitchen timer calculation
 ```
 
-Ejemplo:
-```
-feat: agregar alarma sonora para humo
-fix: corregir cobertura de fuego en baja resolucion
-```
+## License
 
----
-
-## Licencia
-
-Al contribuir, aceptas que tu codigo pasa a ser propiedad de CocinaP y
-estara sujeto a los terminos de la [licencia comercial](LICENSE).
+Contributions are accepted only under the terms authorized by the repository
+owner and are subject to the [commercial license](LICENSE).

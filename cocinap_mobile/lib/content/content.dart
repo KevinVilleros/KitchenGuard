@@ -363,9 +363,9 @@ class PrivacyInfo {
       sections.map((s) => _l(s, lang)).toList();
 }
 
-/// Gestor simple del idioma de la app (español por defecto).
+/// Gestor simple del idioma de la app (inglés por defecto).
 class AppLocal {
-  static String language = "es";
+  static String language = "en";
 
   static void setLanguage(String lang) {
     language = lang == "en" ? "en" : "es";

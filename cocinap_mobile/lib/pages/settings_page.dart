@@ -174,11 +174,11 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text(
-              "Monitoreo",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              l("Monitoreo", "Monitoring"),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
 
@@ -321,11 +321,11 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text(
-              "Detección",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              l("Detección", "Detection"),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           ListTile(
