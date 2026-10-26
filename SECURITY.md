@@ -46,7 +46,9 @@ Si encontraste una vulnerabilidad de seguridad en CocinaP:
 - La configuracion se almacena en `%APPDATA%\CocinaP/config.json`
 - Los logs de eventos estan en `%APPDATA%\CocinaP\logs\`
 - El proyecto no depende actualmente de Firebase Cloud Messaging; las notificaciones son locales
-- Las preferencias movil se almacenan con SharedPreferences en el dispositivo
+- Las preferencias no sensibles se almacenan con SharedPreferences en el dispositivo
+- La API key se almacena en Keystore/EncryptedSharedPreferences en Android y en Keychain en iOS
+- Las claves heredadas se migran una vez desde SharedPreferences y luego se eliminan
 - No se recopilan datos personales ni se ofrecen servicios configurados de telemetria
 
 ### Dependencias
