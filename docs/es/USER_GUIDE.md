@@ -52,8 +52,15 @@ En **Monitoreo**, toca el icono **Dispositivos** (barra superior) o el botón
 **"Cambiar dispositivo o cámara"**. Se abre una hoja con las fuentes:
 
 - **Cámara del móvil:** usa la cámara del teléfono.
-- **Cámara IP:** introduce la URL del stream (por ejemplo
-  `http://192.168.1.50:8080/video` o una URL MJPEG).
+- **Cámara IP:** toca **Configurar** y busca cámaras ONVIF en el Wi-Fi. El
+  teléfono y la cámara deben estar en la misma red y ONVIF habilitado. Selecciona
+  la cámara e introduce sus credenciales. Si no aparece, puedes introducir una
+  URL completa HTTP/MJPEG o RTSP del manual o de la app de la cámara; una IP
+  sola no basta. En iOS, el sistema puede limitar la búsqueda multicast
+  automática. Las credenciales se guardan de forma segura en el dispositivo.
+  ONVIF y RTSP pueden requerir credenciales distintas; usa las de RTSP cuando
+  la app las solicite. Si falla ONVIF, puedes probar la ruta RTSP `/stream2`;
+  confirma que sea compatible con tu cámara y ajusta la URL si hace falta.
 - **PC con CocinaP:** si está conectado, abre la cámara del PC; si no, te lleva
   a **Conectar**.
 
@@ -135,8 +142,9 @@ locales** de cocina desatendida con sonido y vibración.
 
 - **Colocación de la cámara:** enfoca la zona de cocción completa, con buena luz
   y sin obstáculos.
-- **Cámara IP:** usa una URL MJPEG accesible desde la red local; evita cámaras
-  que solo ofrecen RTSP (el móvil usa MJPEG).
+- **Cámara IP:** la detección ONVIF busca en la red local. Si no encuentra la
+  cámara, comprueba que ONVIF esté habilitado y que ambos dispositivos estén en
+  el mismo Wi-Fi; también puedes introducir la URL HTTP/MJPEG o RTSP manualmente.
 - **Ahorro de batería:** el monitoreo con cámara consume batería; mantén el
   teléfono cargando en sesiones largas.
 - **Fuego y humo:** requieren el PC conectado (la app móvil sola detecta solo

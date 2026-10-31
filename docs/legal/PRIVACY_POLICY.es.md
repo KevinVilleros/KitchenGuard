@@ -16,7 +16,7 @@ Esta Política de Privacidad explica qué datos tratamos, cómo los usamos y qu�
 - Nombre / Razón social: [Nombre legal de la empresa o persona]
 - Correo de contacto: [correo electrónico]
 - Dirección: [dirección postal]
-- Sitio web: [URL del sitio web]
+- Sitio web: No disponible actualmente
 
 ---
 
@@ -24,7 +24,7 @@ Esta Política de Privacidad explica qué datos tratamos, cómo los usamos y qu�
 
 El diseño de CocinaP prioriza tu privacidad. **Las imágenes de las cámaras se procesan directamente en tu dispositivo** (en el teléfono móvil o en el ordenador donde está instalado el sistema).
 
-**No enviamos, almacenamos ni transmitimos a nuestros servidores** las imágenes, clips, videos ni cualquier dato derivado de la detección (como la presencia de personas). Salvo que se indique lo contrario en esta política, todo el análisis de video es local.
+**No enviamos imágenes a servidores de CocinaP ni ofrecemos almacenamiento de video en la nube.** Si conectas el modo PC, el stream se recibe de tu propio ordenador por la red configurada. Si conectas una cámara IP, el video se solicita directamente a ella; el análisis de presencia del móvil es local.
 
 Puedes consultar esta implementación técnica en el manual y la arquitectura del proyecto (ver `docs/ARCHITECTURE.md`).
 
@@ -49,7 +49,7 @@ La aplicación puede solicitar los siguientes permisos y tratar los siguientes d
 - Las preferencias que introduces (p. ej., duración del monitoreo, tiempo de alerta, confianza de detección, configuración de la cámara IP) se guardan **localmente** en tu dispositivo.
 
 ### 3.5 Uso de la cámara de terceros (cámaras IP)
-- La aplicación puede conectarse a una cámara de seguridad de tu propiedad (cámara IP) a través de la URL que tú mismo configuras. En ese caso, la aplicación **solo accede al stream de video** de dicha cámara para analizarlo localmente. La URL y credenciales que introduzcas se guardan localmente en tu dispositivo.
+- La aplicación puede descubrir cámaras ONVIF anunciadas en tu red local o conectarse a un stream RTSP/HTTP-MJPEG que tú configures. Las credenciales ONVIF se usan para solicitar el stream en la red local; la URL de stream, incluidas las credenciales cuando corresponda, se guarda en el almacenamiento seguro del dispositivo. El video se analiza localmente.
 - **Responsabilidad del usuario:** eres responsable de tener autorización para conectarte a esas cámaras y de cumplir con las leyes de privacidad y videovigilancia aplicables en tu jurisdicción (p. ej., informar a las personas que puedan ser captadas, y no instalar las cámaras en zonas donde la expectativa de privacidad sea alta, como baños o dormitorios).
 
 ---
@@ -71,14 +71,14 @@ La aplicación usa modelos de inteligencia artificial y visión por computadora 
 La aplicación no transmite tu configuración ni las imágenes analizadas a servidores de CocinaP **mientras no configures funciones que requieran conectividad explícita** (por ejemplo, la conexión al servidor/compañero CocinaP que tú mismo instalas y controlas).
 
 ### Sobre las notificaciones push (información adicional)
-En el caso de que, en el futuro, se habiliten notificaciones push remotas (p. ej., a través de un proveedor de mensajería como Firebase Cloud Messaging), el único dato técnico necesario para el envío sería el identificador del dispositivo, con la única finalidad de entregarte la notificación. No utilizaríamos estos mecanismos para analizar ni revender tus datos. Cualquier activación de estas funciones será informada en esta política.
+La versión actual utiliza notificaciones locales y no integra notificaciones push remotas. El comportamiento de las notificaciones depende de la plataforma y de los permisos concedidos.
 
 ---
 
 ## 6. Retención de datos
 
 - Los datos de configuración se conservan en tu dispositivo hasta que los borres o desinstales la aplicación.
-- Puedes eliminar en cualquier momento el historial de alertas desde la configuración de la aplicación.
+- El historial visible de alertas de la sesión es temporal y puede perderse al cerrar la app; la versión actual no ofrece un historial persistente ni una función para exportarlo.
 - Para el borrado total, puedes desinstalar la aplicación. Si has sincronizado con un servidor propio, elimina los datos de ese servidor y revoca las conexiones/cámaras configuradas.
 
 **Derecho al olvido:** puedes solicitar la eliminación de cualquier dato que pudiera obrar en poder del editor escribiendo al correo de contacto indicado al inicio de esta política.
@@ -115,7 +115,13 @@ Para ejercer estos derechos, escríbenos al correo de contacto indicado al inici
 
 ---
 
-## 10. Cambios en esta política
+## 10. Pendiente antes de publicar
+
+Este archivo sigue siendo una plantilla: reemplaza todos los campos entre
+corchetes, confirma las prácticas reales de cada plataforma y somételo a
+revisión legal antes de distribuir la app.
+
+## 11. Cambios en esta política
 
 Podemos actualizar esta Política de Privacidad para reflejar cambios en la aplicación o en la normativa. Cuando lo hagamos, actualizaremos la fecha de "última actualización" al inicio del documento y, cuando sea relevante, lo notificaremos dentro de la propia aplicación.
 

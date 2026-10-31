@@ -4,12 +4,13 @@ Current status and planned features. This is a living document.
 
 ---
 
-## Current status (v1.0.x)
+## Current status (v1.0.2-pre)
 
 ### Done
 
 - Flutter mobile app (Android + iOS) with 5 tabs.
 - Standalone mode: phone camera or IP camera.
+- Local ONVIF discovery; RTSP and HTTP/MJPEG playback.
 - **On-device** people detection with TFLite (SSD MobileNet V2 / COCO).
 - Monitoring timer with pause/resume/stop.
 - Local alerts (sound + vibration) for unattended cooking.
@@ -26,10 +27,34 @@ Current status and planned features. This is a living document.
 
 ## Upcoming versions
 
+### Release blockers before publishing v1.0.2
+
+- [ ] Test ONVIF, RTSP and MJPEG against a documented matrix of camera models
+  and routers; V380 Pro / AIT36106 has not yet been validated.
+- [ ] Run installation, upgrade, permission, alarm, reconnection and background
+  QA on physical Android and iPhone devices.
+- [ ] Configure production signing and verify signed APK/AAB and IPA artifacts;
+  the debug key must not be used for store distribution.
+- [ ] Review the licenses for libmpv, FFmpeg/codecs and other native
+  dependencies; include required notices and fulfill applicable redistribution
+  obligations.
+- [ ] Replace the debug key currently configured for release builds with a
+  production signing key stored outside the repository.
+- [ ] Complete publisher details and outstanding legal-policy fields; verify
+  app-store privacy and security declarations.
+- [ ] Complete legal/commercial review and publish accurate terms, privacy
+  policy, support details and capability descriptions.
+
+ONVIF discovery is implemented, but only finds cameras that advertise ONVIF on
+the local network. Compatibility is not guaranteed based on the camera
+companion-app brand; an IP address visible in the router does not mean the
+camera exposes a compatible video stream. The phone and camera must be able to
+communicate directly on the same network.
+
 ### v1.1 — Experience and stability
 
 - [ ] Persistent local alert history on the phone.
-- [ ] IP camera picker with local network discovery.
+- [x] IP camera picker with ONVIF discovery and manual fallback.
 - [ ] Keep-screen-on mode during monitoring.
 - [ ] More widget tests (monitoring, settings, tour).
 - [ ] Accessibility: text sizes and contrast.

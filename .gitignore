@@ -55,7 +55,6 @@ cocinap_mobile/build/
 cocinap_mobile/.flutter-plugins
 cocinap_mobile/.flutter-plugins-dependencies
 cocinap_mobile/.pub/
-cocinap_mobile/pubspec.lock
 cocinap_mobile/android/.gradle/
 cocinap_mobile/android/app/build/
 cocinap_mobile/android/build/

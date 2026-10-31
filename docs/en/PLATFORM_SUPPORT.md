@@ -12,6 +12,8 @@ device validation.
 | Mobile app | iOS | iOS 17.0+ | Code and CI build prepared; physical validation required |
 | Local detection | Android | Camera available | TFLite model integrated; test with compatible devices |
 | Local detection | iPhone | Camera available | Model and ML Kit plugin integrated; test on a physical iPhone |
+| IP camera | Android | ONVIF/RTSP or HTTP/MJPEG camera on LAN | ONVIF and RTSP implemented; physical compatibility matrix pending |
+| IP camera | iOS | ONVIF/RTSP or HTTP/MJPEG camera on LAN | RTSP/MJPEG implemented; multicast discovery needs iPhone QA |
 | Optional backend | Windows | Windows 10/11, Python 3.10+ | Packaging and Python CI available |
 | Connected mode | Android/iOS | Shared local network | Requires mDNS, QR or manual URL validation on both platforms |
 
@@ -20,6 +22,10 @@ device validation.
 Release configuration is located at `cocinap_mobile/android/app/build.gradle.kts`.
 The manifest declares Internet, camera, foreground service, notifications and
 boot-related permissions. Before publishing a release:
+
+**Current blocker:** the `release` build type still uses the `debug` signing
+key. Do not distribute APK/AABs built with that key; configure and validate a
+production signing key outside the repository.
 
 1. Run `flutter analyze` and `flutter test`.
 2. Build `flutter build apk --release` and `flutter build appbundle --release`.
@@ -51,7 +57,9 @@ may impose an expiration period of approximately seven days.
 | Camera permission | Required | Required | Explained before request and safe when denied |
 | Local network/notification permissions | As applicable | Required | Function explains denial and preserves a valid state |
 | Mobile camera detection | Required | Required | Documented detection and no-detection scenarios pass |
-| IP camera/MJPEG | Recommended | Recommended | Stream renders without blocking the UI |
+| IP camera/MJPEG | Required | Required | Stream renders without blocking the UI |
+| ONVIF discovery | Required for ONVIF cameras | Required for ONVIF cameras | Camera on same LAN; validate local-network permission/multicast on iPhone |
+| IP camera/RTSP | Required | Required | Stable video and detection with valid credentials |
 | Backend connection | Recommended | Recommended | QR, mDNS and manual connection work |
 | Screen rotation | Required | Required | UI does not lose state or cut controls |
 | Suspend/resume | Required | Required | App resumes safely or stops in a controlled state |

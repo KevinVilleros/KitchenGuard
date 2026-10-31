@@ -57,7 +57,7 @@ Terms, acronyms and concepts used in the project.
 
 - **Rate limiting:** cap on requests per unit of time.
 - **ROI (Region of Interest):** area of interest in the frame (e.g. the stove).
-- **RTSP:** IP camera streaming protocol (not supported directly on the phone).
+- **RTSP:** IP camera streaming protocol supported by standalone mobile mode.
 
 ## S
 

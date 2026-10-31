@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:media_kit/media_kit.dart';
 import 'services/settings_service.dart';
 import 'services/background_service.dart';
 import 'providers/standalone_provider.dart';
@@ -13,6 +14,7 @@ import 'content/content.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
 
   final settings = SettingsService();
   final standalone = StandaloneProvider();

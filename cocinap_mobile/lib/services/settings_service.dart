@@ -21,7 +21,8 @@ class SettingsService {
   static const _maxRecents = 5;
   static const _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+    iOptions: IOSOptions(
+        accessibility: KeychainAccessibility.first_unlock_this_device),
   );
 
   Future<String> getLanguage() async {
@@ -115,13 +116,31 @@ class SettingsService {
   }
 
   Future<String> getStandaloneCameraUrl() async {
+    final secureUrl = await _secureStorage.read(key: _keyStandaloneCameraUrl);
+    if (secureUrl != null && secureUrl.isNotEmpty) return secureUrl;
+
+    // Migrate any URL (which may contain camera credentials) to secure storage.
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyStandaloneCameraUrl) ?? "";
+    final legacyUrl = prefs.getString(_keyStandaloneCameraUrl) ?? "";
+    if (legacyUrl.isNotEmpty) {
+      await _secureStorage.write(
+        key: _keyStandaloneCameraUrl,
+        value: legacyUrl,
+      );
+      await prefs.remove(_keyStandaloneCameraUrl);
+      return legacyUrl;
+    }
+    return "";
   }
 
   Future<void> setStandaloneCameraUrl(String url) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyStandaloneCameraUrl, url);
+    if (url.isEmpty) {
+      await _secureStorage.delete(key: _keyStandaloneCameraUrl);
+    } else {
+      await _secureStorage.write(key: _keyStandaloneCameraUrl, value: url);
+    }
+    await prefs.remove(_keyStandaloneCameraUrl);
   }
 
   Future<bool> getHasSeenOnboarding() async {

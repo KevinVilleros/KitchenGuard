@@ -1,13 +1,41 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import '../providers/standalone_provider.dart';
 import '../services/person_detector.dart';
 import '../services/background_service.dart';
+import '../services/mjpeg_frame_parser.dart';
+import '../services/settings_service.dart';
+import '../widgets/camera_url_dialog.dart';
 import '../content/content.dart';
+
+@visibleForTesting
+const rtspDetectionCaptureInterval = Duration(seconds: 1);
+
+@visibleForTesting
+const rtspCameraPlayerConfiguration = PlayerConfiguration(
+  muted: true,
+  bufferSize: 4 * 1024 * 1024,
+  protocolWhitelist: [
+    'rtsp',
+    'udp',
+    'rtp',
+    'tcp',
+    'tls',
+    'data',
+    'file',
+    'http',
+    'https',
+    'crypto',
+  ],
+);
 
 /// Página del modo independiente: monitorea la cocina en el móvil (con la
 /// cámara del dispositivo o una cámara IP) usando un temporizador configurable.
@@ -25,8 +53,19 @@ class _StandalonePageState extends State<StandalonePage> {
   CameraDescription? _cameraDescription;
   final PersonDetector _detector = PersonDetector();
   Timer? _alertTimer;
-  StreamSubscription<Uint8List>? _ipStreamSub;
+  StreamSubscription<List<int>>? _ipStreamSub;
+  StreamSubscription<String>? _rtspErrorSub;
+  StreamSubscription<VideoParams>? _rtspVideoParamsSub;
+  HttpClient? _ipHttpClient;
+  Player? _rtspPlayer;
+  VideoController? _rtspController;
+  Timer? _rtspFrameTimer;
+  Timer? _rtspConnectTimeout;
+  bool _rtspScreenshotInFlight = false;
+  bool _rtspVideoReady = false;
+  int _cameraGeneration = 0;
   bool _cameraError = false;
+  String? _cameraErrorMessage;
   bool _detectorLoading = false;
   Uint8List? _lastIpFrame;
   StandaloneCameraSource _lastSource = StandaloneCameraSource.phone;
@@ -83,19 +122,31 @@ class _StandalonePageState extends State<StandalonePage> {
   Future<void> _initVideo() async {
     final standalone = context.read<StandaloneProvider>();
     final source = standalone.cameraSource;
+    _cameraErrorMessage = null;
     _lastSource = source;
     _lastUrl = standalone.cameraUrl;
 
     _stopVideo();
+    standalone.setCameraActive(false);
 
     if (source == StandaloneCameraSource.ipCamera) {
       final url = standalone.cameraUrl;
       if (url.isEmpty) {
-        setState(() => _cameraError = true);
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = null;
+        });
         return;
       }
-      standalone.setCameraActive(true);
-      _startIpStream(url);
+      setState(() {
+        _cameraError = false;
+        _cameraErrorMessage = null;
+      });
+      if (url.toLowerCase().startsWith('rtsp://')) {
+        _startRtspStream(url);
+      } else {
+        _startIpStream(url);
+      }
       return;
     }
 
@@ -103,31 +154,46 @@ class _StandalonePageState extends State<StandalonePage> {
     try {
       final cameras = await availableCameras();
       if (!mounted || cameras.isEmpty) {
-        setState(() => _cameraError = true);
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = null;
+        });
         return;
       }
       late CameraDescription back;
       try {
-        back = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.back);
+        back = cameras
+            .firstWhere((c) => c.lensDirection == CameraLensDirection.back);
       } catch (_) {
         back = cameras.first;
       }
       final controller = await _createController(back);
       if (!mounted || controller == null) {
-        if (mounted) setState(() => _cameraError = true);
+        if (mounted) {
+          setState(() {
+            _cameraError = true;
+            _cameraErrorMessage = null;
+          });
+        }
         return;
       }
       _cameraDescription = back;
       _updateRotation(back, controller);
       setState(() {
         _cameraError = false;
+        _cameraErrorMessage = null;
         _camera = controller;
       });
       standalone.setCameraActive(true);
       _startPhoneStream();
     } catch (e) {
       debugPrint('Camera init error: $e');
-      if (mounted) setState(() => _cameraError = true);
+      if (mounted) {
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = null;
+        });
+      }
     }
   }
 
@@ -196,9 +262,191 @@ class _StandalonePageState extends State<StandalonePage> {
   }
 
   /// Consume un stream MJPEG de una cámara IP y lo envía al detector.
-  void _startIpStream(String url) {
+  Future<void> _startIpStream(String url) async {
+    final generation = _cameraGeneration;
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8)
+      ..idleTimeout = const Duration(seconds: 15);
+    _ipHttpClient = client;
     _lastIpFrame = null;
-    setState(() => _cameraError = true);
+    final parser = MjpegFrameParser();
+
+    try {
+      final uri = Uri.parse(url);
+      if (!{'http', 'https'}.contains(uri.scheme.toLowerCase()) ||
+          uri.host.isEmpty) {
+        throw const FormatException('Invalid camera stream URL');
+      }
+      final requestUri = Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+        path: uri.path.isEmpty ? '/' : uri.path,
+        query: uri.hasQuery ? uri.query : null,
+      );
+      final request = await client.getUrl(requestUri);
+      request.headers.set(
+        HttpHeaders.acceptHeader,
+        'multipart/x-mixed-replace, image/jpeg',
+      );
+      if (uri.userInfo.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Basic ${base64Encode(utf8.encode(Uri.decodeComponent(uri.userInfo)))}',
+        );
+      }
+      final response = await request.close().timeout(
+            const Duration(seconds: 10),
+          );
+      if (generation != _cameraGeneration) return;
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Camera returned HTTP ${response.statusCode}',
+          uri: requestUri,
+        );
+      }
+
+      _ipStreamSub = response.listen(
+        (chunk) {
+          if (generation != _cameraGeneration) return;
+          try {
+            for (final frame in parser.add(chunk)) {
+              if (!mounted || generation != _cameraGeneration) return;
+              setState(() {
+                _lastIpFrame = frame;
+                _cameraError = false;
+                _cameraErrorMessage = null;
+              });
+              context.read<StandaloneProvider>().setCameraActive(true);
+              final standalone = context.read<StandaloneProvider>();
+              _runDetection(
+                () => _detector.detectFromJpeg(
+                  frame,
+                  confidence: standalone.confidence,
+                ),
+              );
+            }
+          } catch (error) {
+            _handleIpStreamFailure(generation, error);
+          }
+        },
+        onError: (Object error) => _handleIpStreamFailure(generation, error),
+        onDone: () => _handleIpStreamFailure(
+          generation,
+          const HttpException('Camera stream ended'),
+        ),
+        cancelOnError: true,
+      );
+    } catch (error) {
+      _handleIpStreamFailure(generation, error);
+    }
+  }
+
+  Future<void> _startRtspStream(String url) async {
+    final generation = _cameraGeneration;
+    final player = Player(configuration: rtspCameraPlayerConfiguration);
+    final controller = VideoController(player);
+    _rtspPlayer = player;
+    _rtspController = controller;
+    _rtspVideoReady = false;
+    _rtspErrorSub = player.stream.error.listen((_) {
+      _handleRtspFailure(generation);
+    });
+    _rtspVideoParamsSub = player.stream.videoParams.listen((params) {
+      if (generation == _cameraGeneration &&
+          (params.w ?? 0) > 0 &&
+          (params.h ?? 0) > 0) {
+        _rtspVideoReady = true;
+      }
+    });
+    _rtspConnectTimeout = Timer(const Duration(seconds: 15), () {
+      if (generation == _cameraGeneration &&
+          !context.read<StandaloneProvider>().cameraActive) {
+        _handleRtspFailure(generation);
+      }
+    });
+    _rtspFrameTimer = Timer.periodic(
+      rtspDetectionCaptureInterval,
+      (_) => _captureRtspFrame(player, generation),
+    );
+    if (mounted) setState(() {});
+
+    try {
+      await player.open(Media(url));
+    } on Exception {
+      _handleRtspFailure(generation);
+    }
+  }
+
+  Future<void> _captureRtspFrame(Player player, int generation) async {
+    if (_rtspScreenshotInFlight ||
+        generation != _cameraGeneration ||
+        !_rtspVideoReady ||
+        !mounted) {
+      return;
+    }
+    _rtspScreenshotInFlight = true;
+    try {
+      final frame = await player.screenshot(format: 'image/jpeg');
+      if (frame == null || generation != _cameraGeneration || !mounted) {
+        return;
+      }
+      final standalone = context.read<StandaloneProvider>();
+      if (!standalone.cameraActive) {
+        standalone.setCameraActive(true);
+        _rtspConnectTimeout?.cancel();
+      }
+      _runDetection(
+        () => _detector.detectFromJpeg(
+          frame,
+          confidence: standalone.confidence,
+        ),
+      );
+    } on Exception {
+      if (generation == _cameraGeneration && mounted) {
+        _handleRtspFailure(generation);
+      }
+    } finally {
+      _rtspScreenshotInFlight = false;
+    }
+  }
+
+  void _handleRtspFailure(int generation) {
+    if (generation != _cameraGeneration || !mounted) return;
+    _rtspFrameTimer?.cancel();
+    _rtspFrameTimer = null;
+    _rtspConnectTimeout?.cancel();
+    _rtspConnectTimeout = null;
+    _rtspErrorSub?.cancel();
+    _rtspErrorSub = null;
+    _rtspVideoParamsSub?.cancel();
+    _rtspVideoParamsSub = null;
+    final player = _rtspPlayer;
+    _rtspPlayer = null;
+    _rtspController = null;
+    if (player != null) unawaited(player.dispose());
+    context.read<StandaloneProvider>().setCameraActive(false);
+    setState(() {
+      _cameraError = true;
+      _cameraErrorMessage = lang == 'en'
+          ? 'Could not open the RTSP stream. Check the full stream path and the camera’s RTSP username and password. ONVIF and RTSP may use different credentials.'
+          : 'No se pudo abrir el stream RTSP. Verifica la ruta completa y el usuario y contraseña RTSP de la cámara. ONVIF y RTSP pueden usar credenciales diferentes.';
+    });
+  }
+
+  void _handleIpStreamFailure(int generation, Object error) {
+    if (generation != _cameraGeneration || !mounted) return;
+    debugPrint('IP camera stream error: $error');
+    _ipHttpClient?.close(force: true);
+    _ipHttpClient = null;
+    _ipStreamSub = null;
+    context.read<StandaloneProvider>().setCameraActive(false);
+    setState(() {
+      _cameraError = true;
+      _cameraErrorMessage = lang == 'en'
+          ? 'Could not read the camera stream. Check its URL and that the phone and camera are on the same network.'
+          : 'No se pudo leer el stream de la cámara. Verifica la URL y que el teléfono y la cámara estén en la misma red.';
+    });
   }
 
   /// Stream de frames de la cámara del móvil → detección de personas.
@@ -230,7 +478,12 @@ class _StandalonePageState extends State<StandalonePage> {
           ));
     }).catchError((Object e) {
       debugPrint('PhoneStream error: $e');
-      if (mounted) setState(() => _cameraError = true);
+      if (mounted) {
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = null;
+        });
+      }
     });
   }
 
@@ -263,8 +516,25 @@ class _StandalonePageState extends State<StandalonePage> {
   }
 
   void _stopVideo() {
+    _cameraGeneration++;
+    _rtspFrameTimer?.cancel();
+    _rtspFrameTimer = null;
+    _rtspConnectTimeout?.cancel();
+    _rtspConnectTimeout = null;
+    _rtspErrorSub?.cancel();
+    _rtspErrorSub = null;
+    _rtspVideoParamsSub?.cancel();
+    _rtspVideoParamsSub = null;
+    final rtspPlayer = _rtspPlayer;
+    _rtspPlayer = null;
+    _rtspController = null;
+    if (rtspPlayer != null) unawaited(rtspPlayer.dispose());
+    _rtspScreenshotInFlight = false;
+    _rtspVideoReady = false;
     _ipStreamSub?.cancel();
     _ipStreamSub = null;
+    _ipHttpClient?.close(force: true);
+    _ipHttpClient = null;
     _camera?.dispose();
     _camera = null;
     _cameraDescription = null;
@@ -289,7 +559,9 @@ class _StandalonePageState extends State<StandalonePage> {
           : "Cocina desatendida ($interval min sin persona). Alerta #$n.";
       standalone.markIntervalFired(interval, message);
       BackgroundServiceManager.showAlarm(message);
-      BackgroundServiceManager.updateStatus(lang == "en" ? "No person: $interval min" : "Sin persona: $interval min");
+      BackgroundServiceManager.updateStatus(lang == "en"
+          ? "No person: $interval min"
+          : "Sin persona: $interval min");
     });
   }
 
@@ -304,7 +576,8 @@ class _StandalonePageState extends State<StandalonePage> {
 
   Future<void> _startTimer(BuildContext context) async {
     final standalone = context.read<StandaloneProvider>();
-    final minutesCtrl = TextEditingController(text: "${standalone.durationMinutes}");
+    final minutesCtrl =
+        TextEditingController(text: "${standalone.durationMinutes}");
     final minutes = await showDialog<int>(
       context: context,
       builder: (ctx) {
@@ -319,20 +592,23 @@ class _StandalonePageState extends State<StandalonePage> {
                 controller: minutesCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: l("Minutos de monitoreo (1-240)", "Monitoring minutes (1-240)"),
+                  labelText: l("Minutos de monitoreo (1-240)",
+                      "Monitoring minutes (1-240)"),
                   border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 l("Se vigila la cocina. Si NO se detecta una persona, se enviará una alerta.",
-                  "The kitchen is monitored. If NO person is detected, an alert will be sent."),
+                    "The kitchen is monitored. If NO person is detected, an alert will be sent."),
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l("Cancelar", "Cancel"))),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l("Cancelar", "Cancel"))),
             ElevatedButton(
               onPressed: () {
                 final v = int.tryParse(minutesCtrl.text) ?? 30;
@@ -359,10 +635,14 @@ class _StandalonePageState extends State<StandalonePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocal.language == "en" ? "Standalone mode" : "Modo independiente"),
+        title: Text(AppLocal.language == "en"
+            ? "Standalone mode"
+            : "Modo independiente"),
         actions: [
           IconButton(
-            tooltip: AppLocal.language == "en" ? "Change device or camera" : "Cambiar dispositivo o cámara",
+            tooltip: AppLocal.language == "en"
+                ? "Change device or camera"
+                : "Cambiar dispositivo o cámara",
             icon: const Icon(Icons.devices),
             onPressed: () => _showDevicesSheet(context),
           ),
@@ -383,14 +663,19 @@ class _StandalonePageState extends State<StandalonePage> {
               children: [
                 Icon(
                   standalone.personPresent ? Icons.person : Icons.person_off,
-                  color: standalone.personPresent ? Colors.greenAccent : Colors.redAccent,
+                  color: standalone.personPresent
+                      ? Colors.greenAccent
+                      : Colors.redAccent,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     standalone.statusText,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13),
                   ),
                 ),
               ],
@@ -403,30 +688,39 @@ class _StandalonePageState extends State<StandalonePage> {
               fit: StackFit.expand,
               children: [
                 _cameraError
-                    ? const Center(
+                    ? Center(
                         child: Padding(
-                          padding: EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(20),
                           child: Text(
-                            AppLocal.language == "en"
-                                ? "Could not access the camera.\nCheck the connection and permissions."
-                                : "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos.",
-                            style: TextStyle(color: Colors.white),
+                            _cameraErrorMessage ??
+                                (lang == "en"
+                                    ? "Could not access the camera.\nCheck the connection and permissions."
+                                    : "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos."),
+                            style: const TextStyle(color: Colors.white),
                             textAlign: TextAlign.center,
                           ),
                         ),
                       )
                     : standalone.cameraSource == StandaloneCameraSource.ipCamera
-                        ? (_lastIpFrame == null
-                            ? const Center(
-                                child: CircularProgressIndicator(),
-                              )
-                            : Image.memory(
-                                _lastIpFrame!,
-                                width: double.infinity,
-                                height: double.infinity,
-                                fit: BoxFit.contain,
-                                gaplessPlayback: true,
-                              ))
+                        ? (standalone.cameraUrl
+                                .toLowerCase()
+                                .startsWith('rtsp://')
+                            ? (_rtspController == null
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Video(controller: _rtspController!))
+                            : (_lastIpFrame == null
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Image.memory(
+                                    _lastIpFrame!,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    fit: BoxFit.contain,
+                                    gaplessPlayback: true,
+                                  )))
                         : (_camera == null
                             ? const Center(child: CircularProgressIndicator())
                             : CameraPreview(_camera!)),
@@ -491,7 +785,9 @@ class _StandalonePageState extends State<StandalonePage> {
                 children: [
                   _StatTile(
                     icon: Icons.timer,
-                    label: standalone.timerRunning ? (lang == "en" ? "Time remaining" : "Tiempo restante") : (lang == "en" ? "Timer" : "Temporizador"),
+                    label: standalone.timerRunning
+                        ? (lang == "en" ? "Time remaining" : "Tiempo restante")
+                        : (lang == "en" ? "Timer" : "Temporizador"),
                     value: standalone.timerRunning
                         ? standalone.remainingLabel
                         : "${standalone.durationMinutes} min",
@@ -504,8 +800,12 @@ class _StandalonePageState extends State<StandalonePage> {
                   ),
                   _StatTile(
                     icon: Icons.person,
-                    label: lang == "en" ? "Person in kitchen" : "Persona en cocina",
-                    value: standalone.personPresent ? (lang == "en" ? "YES" : "SÍ") : (lang == "en" ? "NO" : "NO"),
+                    label: lang == "en"
+                        ? "Person in kitchen"
+                        : "Persona en cocina",
+                    value: standalone.personPresent
+                        ? (lang == "en" ? "YES" : "SÍ")
+                        : (lang == "en" ? "NO" : "NO"),
                     color: color,
                   ),
                   Container(
@@ -546,7 +846,8 @@ class _StandalonePageState extends State<StandalonePage> {
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.red.shade900.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(12),
@@ -560,22 +861,22 @@ class _StandalonePageState extends State<StandalonePage> {
                         const Icon(Icons.warning_amber,
                             color: Colors.redAccent, size: 16),
                         const SizedBox(width: 6),
-              Text(
-                lang == "en" ? "Recent alerts" : "Alertas recientes",
-                style: TextStyle(
-                  color: Colors.red.shade200,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
+                        Text(
+                          lang == "en" ? "Recent alerts" : "Alertas recientes",
+                          style: TextStyle(
+                            color: Colors.red.shade200,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
                         const Spacer(),
                         GestureDetector(
                           onTap: standalone.clearAlerts,
-                        child: Text(
-                          lang == "en" ? "Clear" : "Limpiar",
-                          style: TextStyle(
-                              color: Colors.grey.shade400, fontSize: 12),
-                        ),
+                          child: Text(
+                            lang == "en" ? "Clear" : "Limpiar",
+                            style: TextStyle(
+                                color: Colors.grey.shade400, fontSize: 12),
+                          ),
                         ),
                       ],
                     ),
@@ -602,28 +903,33 @@ class _StandalonePageState extends State<StandalonePage> {
                   ElevatedButton.icon(
                     onPressed: () => _startTimer(context),
                     icon: const Icon(Icons.play_arrow),
-                    label: Text(lang == "en" ? "Start monitoring" : "Iniciar monitoreo"),
+                    label: Text(lang == "en"
+                        ? "Start monitoring"
+                        : "Iniciar monitoreo"),
                   ),
                 if (standalone.timerRunning && !standalone.timerPaused)
                   ElevatedButton.icon(
                     onPressed: () => standalone.pauseTimer(),
                     icon: const Icon(Icons.pause),
                     label: Text(lang == "en" ? "Pause" : "Pausa"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange.shade700),
                   ),
                 if (standalone.timerRunning && standalone.timerPaused)
                   ElevatedButton.icon(
                     onPressed: () => standalone.resumeTimer(),
                     icon: const Icon(Icons.play_arrow),
                     label: Text(lang == "en" ? "Resume" : "Reanudar"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade700),
                   ),
                 if (standalone.timerRunning)
                   ElevatedButton.icon(
                     onPressed: () => standalone.stopTimer(),
                     icon: const Icon(Icons.stop),
                     label: Text(lang == "en" ? "Stop" : "Parar"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700),
                   ),
               ],
             ),
@@ -635,10 +941,12 @@ class _StandalonePageState extends State<StandalonePage> {
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-            onPressed: () => _showDevicesSheet(context),
-            icon: const Icon(Icons.devices, size: 18),
-            label: Text(AppLocal.language == "en" ? "Change device or camera" : "Cambiar dispositivo o cámara"),
-          ),
+                onPressed: () => _showDevicesSheet(context),
+                icon: const Icon(Icons.devices, size: 18),
+                label: Text(AppLocal.language == "en"
+                    ? "Change device or camera"
+                    : "Cambiar dispositivo o cámara"),
+              ),
             ),
           ),
 
@@ -667,7 +975,9 @@ class _StandalonePageState extends State<StandalonePage> {
     final intervals = standalone.sortedIntervals;
     final lang = AppLocal.language;
     if (intervals.isEmpty) {
-      return lang == "en" ? "No alert intervals configured" : "Sin intervalos de alerta configurados";
+      return lang == "en"
+          ? "No alert intervals configured"
+          : "Sin intervalos de alerta configurados";
     }
     final fired = standalone.firedIntervalCount;
     if (fired < intervals.length) {
@@ -756,7 +1066,8 @@ class _StatTile extends StatelessWidget {
       children: [
         Icon(icon, color: color, size: 28),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
       ],
     );
@@ -769,9 +1080,32 @@ class _StatTile extends StatelessWidget {
 class _DevicesSheet extends StatelessWidget {
   const _DevicesSheet();
 
-  Future<void> _select(BuildContext context, StandaloneCameraSource source) async {
+  Future<void> _select(
+      BuildContext context, StandaloneCameraSource source) async {
     final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    if (source == StandaloneCameraSource.ipCamera) {
+      await _configureIpCamera(context);
+      return;
+    }
     standalone.setCameraSource(source);
+    await settings.setStandaloneSourceIndex(0);
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  Future<void> _configureIpCamera(BuildContext context) async {
+    final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    final url = await showCameraUrlDialog(
+      context,
+      currentUrl: standalone.cameraUrl,
+      language: AppLocal.language,
+    );
+    if (url == null || !context.mounted) return;
+    standalone.setCameraSource(StandaloneCameraSource.ipCamera);
+    standalone.setCameraUrl(url);
+    await settings.setStandaloneCameraUrl(url);
+    await settings.setStandaloneSourceIndex(1);
     if (context.mounted) Navigator.pop(context);
   }
 
@@ -796,7 +1130,9 @@ class _DevicesSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                lang == "en" ? "Choose where to monitor your kitchen" : "Elige desde dónde monitorear tu cocina",
+                lang == "en"
+                    ? "Choose where to monitor your kitchen"
+                    : "Elige desde dónde monitorear tu cocina",
                 style: TextStyle(fontSize: 13, color: Colors.white60),
               ),
               const SizedBox(height: 12),
@@ -805,7 +1141,9 @@ class _DevicesSheet extends StatelessWidget {
               _DeviceTile(
                 icon: Icons.smartphone,
                 title: lang == "en" ? "Phone camera" : "Cámara del móvil",
-                subtitle: lang == "en" ? "Use rear camera of this phone" : "Usa la cámara trasera de este teléfono",
+                subtitle: lang == "en"
+                    ? "Use rear camera of this phone"
+                    : "Usa la cámara trasera de este teléfono",
                 selected: isPhone,
                 onTap: () => _select(context, StandaloneCameraSource.phone),
               ),
@@ -813,14 +1151,18 @@ class _DevicesSheet extends StatelessWidget {
               // Cámara IP
               _DeviceTile(
                 icon: Icons.videocam,
-                title: lang == "en" ? "IP Camera (home / security)" : "Cámara IP (hogar / seguridad)",
+                title: lang == "en"
+                    ? "IP Camera (home / security)"
+                    : "Cámara IP (hogar / seguridad)",
                 subtitle: standalone.cameraUrl.isNotEmpty
-                    ? standalone.cameraUrl
-                    : (lang == "en" ? "Not configured yet" : "Aún no has configurado una URL"),
+                    ? cameraUrlDisplayLabel(standalone.cameraUrl)
+                    : (lang == "en"
+                        ? "Not configured yet"
+                        : "Aún no has configurado una URL"),
                 selected: !isPhone,
-                onTap: () {},
+                onTap: () => _select(context, StandaloneCameraSource.ipCamera),
                 trailing: TextButton(
-                  onPressed: () {},
+                  onPressed: () => _configureIpCamera(context),
                   child: Text(lang == "en" ? "Configure" : "Configurar"),
                 ),
               ),
@@ -829,7 +1171,9 @@ class _DevicesSheet extends StatelessWidget {
 
               const SizedBox(height: 20),
               Text(
-                lang == "en" ? "How to use" : "Cómo conectar la app a una cámara",
+                lang == "en"
+                    ? "How to use"
+                    : "Cómo conectar la app a una cámara",
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -841,14 +1185,22 @@ class _DevicesSheet extends StatelessWidget {
               _HowToRow(
                 number: 1,
                 icon: Icons.smartphone,
-                title: lang == "en" ? "Phone camera (no extra equipment)" : "Cámara del móvil (sin equipos)",
-                body: lang == "en" ? "Place the phone pointing to the stove. Fastest way, no extra equipment needed." : "Coloca el teléfono apuntando a la estufa. Es la forma más rápida: no necesitas nada más.",
+                title: lang == "en"
+                    ? "Phone camera (no extra equipment)"
+                    : "Cámara del móvil (sin equipos)",
+                body: lang == "en"
+                    ? "Place the phone pointing to the stove. Fastest way, no extra equipment needed."
+                    : "Coloca el teléfono apuntando a la estufa. Es la forma más rápida: no necesitas nada más.",
               ),
               _HowToRow(
                 number: 2,
                 icon: Icons.videocam,
-                title: lang == "en" ? "IP camera via MJPEG URL" : "Cámara IP por URL MJPEG",
-                body: lang == "en" ? "Configure IP camera in Settings and paste HTTP/MJPEG URL." : "Toca 'Cámara IP → Configurar' y pega la URL HTTP/MJPEG de tu cámara.",
+                title: lang == "en"
+                    ? "IP camera via MJPEG URL"
+                    : "Cámara IP por URL MJPEG",
+                body: lang == "en"
+                    ? "Configure IP camera in Settings and paste HTTP/MJPEG URL."
+                    : "Toca 'Cámara IP → Configurar' y pega la URL HTTP/MJPEG de tu cámara.",
               ),
               // PC connection section removed
               const SizedBox(height: 8),
@@ -899,9 +1251,8 @@ class _DeviceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final borderColor = selected
-        ? scheme.primary
-        : Colors.white.withValues(alpha: 0.1);
+    final borderColor =
+        selected ? scheme.primary : Colors.white.withValues(alpha: 0.1);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -1053,7 +1404,8 @@ class _DetectionOverlayPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(rect.left, (rect.top - 14).clamp(0, size.height)));
+      tp.paint(
+          canvas, Offset(rect.left, (rect.top - 14).clamp(0, size.height)));
     }
   }
 
@@ -1087,7 +1439,9 @@ class _DetectionDebugPanel extends StatelessWidget {
     final lang = AppLocal.language;
     final status = loading
         ? (lang == "en" ? "Loading model..." : "Cargando modelo...")
-        : (loaded ? (lang == "en" ? "Model active" : "Modelo activo") : (lang == "en" ? "Model not loaded" : "Modelo no cargado"));
+        : (loaded
+            ? (lang == "en" ? "Model active" : "Modelo activo")
+            : (lang == "en" ? "Model not loaded" : "Modelo no cargado"));
     final color = people > 0
         ? Colors.greenAccent
         : (loaded ? Colors.orangeAccent : Colors.redAccent);
@@ -1109,11 +1463,15 @@ class _DetectionDebugPanel extends StatelessWidget {
                 color: color, fontSize: 11, fontWeight: FontWeight.bold),
           ),
           Text(
-            (AppLocal.language == "en" ? "People: $people  (max ${(maxScore * 100).toStringAsFixed(0)}%)" : "Personas: $people  (máx ${(maxScore * 100).toStringAsFixed(0)}%)"),
+            (AppLocal.language == "en"
+                ? "People: $people  (max ${(maxScore * 100).toStringAsFixed(0)}%)"
+                : "Personas: $people  (máx ${(maxScore * 100).toStringAsFixed(0)}%)"),
             style: const TextStyle(color: Colors.white, fontSize: 11),
           ),
           Text(
-            (AppLocal.language == "en" ? "Objects: $total  Frames: $frames" : "Objetos: $total  Frames: $frames"),
+            (AppLocal.language == "en"
+                ? "Objects: $total  Frames: $frames"
+                : "Objetos: $total  Frames: $frames"),
             style: const TextStyle(color: Colors.white70, fontSize: 11),
           ),
           if (info.isNotEmpty)

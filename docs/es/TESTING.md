@@ -30,6 +30,17 @@ Para ejecutar una sola prueba:
 flutter test test/widget_test.dart
 ```
 
+Las pruebas dirigidas de red/cámara:
+
+```bash
+flutter test test/mjpeg_frame_parser_test.dart test/onvif_camera_service_test.dart
+```
+
+Cubren el parseo de frames MJPEG y el filtrado de respuestas ONVIF para aceptar
+endpoints locales y rechazar destinos remotos o URLs con credenciales embebidas.
+No sustituyen la prueba física de negociación ONVIF, autenticación, video RTSP,
+compatibilidad por modelo ni reconexión ante pérdida de red.
+
 Cobertura:
 
 ```bash
@@ -90,23 +101,32 @@ Workflows en `.github/workflows/`:
 |---|---|
 | Disparador | push a `main`/`master` con cambios en `cocinap_mobile/**` o `.github/workflows/ios.yml`; o manual (`workflow_dispatch`) |
 | Runners | `ubuntu-latest` para Android y `macos-latest` para iOS |
-| Jobs | `build-android` (APK), `build-unsigned` (.ipa sin firmar) y `build-signed` (opcional) |
-| Artefactos | `CocinaP-Android` (contiene `app-release.apk`) y `CocinaP-iOS` (contiene `CocinaP-unsigned.ipa`) |
+| Jobs | `validate-mobile` (análisis y pruebas), `build-android` (APK sin firmar), `build-unsigned` (.ipa sin firmar) y `build-signed` (opcional) |
+| Artefactos | `CocinaP-Android-unsigned` (contiene `app-release.apk`) y `CocinaP-iOS` (contiene `CocinaP-unsigned.ipa`) |
+
+Ambos builds de plataforma dependen de `validate-mobile`. El workflow ejecuta
+`flutter analyze` y `flutter test` antes de generar los artefactos.
 
 ### Android
 
-El job `build-android` instala Java 17, configura Flutter estable, obtiene las
-dependencias y ejecuta `flutter build apk --release`. El APK se publica siempre
-que el build termine correctamente, aunque falle posteriormente un build iOS.
+El job `build-android` espera la validación, instala Java 17, configura Flutter
+estable, obtiene las dependencias y ejecuta `flutter build apk --release`. Este
+workflow no tiene configurada la firma de producción Android, por lo que genera
+un APK sin firmar que no está listo para tiendas. El artefacto
+`CocinaP-Android-unsigned` se publica si el build termina correctamente,
+aunque falle posteriormente un build iOS.
 
-Pasos del job principal:
+Pasos del job Android:
 
 1. `checkout`.
-2. `subosito/flutter-action` (canal stable).
-3. `flutter pub get`.
-4. `flutter build ios --release --no-codesign`.
-5. Empaquetado `Payload/` → `CocinaP-unsigned.ipa`.
-6. Subida del artefacto.
+2. `actions/setup-java` (Java 17).
+3. `subosito/flutter-action` (canal stable).
+4. `flutter pub get`.
+5. `flutter build apk --release`.
+6. Subida del artefacto APK sin firmar.
+
+El job `build-unsigned` compila y empaqueta la app iOS como
+`CocinaP-unsigned.ipa`.
 
 El job `build-signed` solo firma si están definidos los secretos
 `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD` y `IOS_PROVISIONING_PROFILE`; en
@@ -130,6 +150,25 @@ caso contrario se omite.
   Play.
 - **iOS:** el `.ipa` se produce en CI; se distribuye mediante Sideloadly
   (cuenta gratuita: expira a los 7 días) o TestFlight/App Store con firma.
+
+#### Firma Android de producción
+
+El tipo `release` ya no usa la clave de depuración. Sin configuración de firma,
+Gradle genera un artefacto `release` sin firmar y muestra una advertencia; no
+se puede subir ese artefacto a Google Play.
+
+1. Crea y guarda una clave de carga (upload key) fuera del repositorio. Guárdala
+   de forma segura y conserva una copia de respaldo; perderla puede impedir
+   futuras actualizaciones de la app.
+2. Crea `cocinap_mobile/android/key.properties` con las propiedades
+   `storeFile`, `storePassword`, `keyAlias` y `keyPassword`. `storeFile` es
+   relativo a `cocinap_mobile/android`; por ejemplo, `upload-keystore.jks`
+   si guardas ahí el archivo.
+3. Mantén fuera de Git tanto `key.properties` como el archivo `.jks` o
+   `.keystore`. No compartas contraseñas ni claves en el código, el chat o los
+   logs de CI.
+4. Genera el AAB con `flutter build appbundle --release` y verifica la firma
+   antes de subirlo a Play Console.
 
 ### Backend
 
@@ -155,6 +194,13 @@ caso contrario se omite.
 - [ ] `flutter test` en verde.
 - [ ] APK e IPA reproducibles desde artefactos documentados.
 - [ ] Matriz Android e iPhone completada en dispositivos reales.
+- [ ] Matriz real de cámaras ONVIF, RTSP y MJPEG probada y publicada; registrar
+  modelos incompatibles y pruebas negativas.
+- [ ] Licencias y avisos de libmpv, FFmpeg/codecs y dependencias nativas
+  revisados antes de distribución comercial.
+- [ ] Firma de producción configurada; no usar la clave `debug`.
+- [ ] Política de privacidad, identidad del editor y fichas de tienda
+  completadas y revisadas legalmente.
 - [ ] Permisos de cámara, red local y segundo plano probados en dispositivo.
 - [ ] Los errores conocidos tienen propietario, impacto y plan de corrección.
 - [ ] `ruff check` y `pytest` en verde (backend).

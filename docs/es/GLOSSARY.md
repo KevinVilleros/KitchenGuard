@@ -60,8 +60,8 @@ Términos, siglas y conceptos usados en el proyecto.
 
 - **Rate limiting:** límite de peticiones por unidad de tiempo.
 - **ROI (Region of Interest):** zona de interés del encuadre (p. ej. la estufa).
-- **RTSP:** protocolo de streaming de cámaras IP (no soportado directamente en
-  el móvil).
+- **RTSP:** protocolo de streaming de cámaras IP compatible con el modo
+  independiente móvil.
 
 ## S
 

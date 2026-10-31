@@ -63,10 +63,17 @@ When adding UI, test on small screens (~411x921 logical px).
 
 ### IP camera shows no image
 
-- Confirm the URL is **MJPEG** (e.g. `http://IP:port/video`).
-- Cameras that only expose **RTSP** won't work directly on the phone.
-- Verify the phone and camera are on the same network.
-- Test the URL in a browser on the PC.
+- Confirm the phone and camera are on the same Wi-Fi/LAN and the router shows
+  the camera connected.
+- Automatic search finds cameras that advertise **ONVIF**; enable ONVIF in the
+  camera settings if the manufacturer provides that option.
+- If it is not found, the camera may not support ONVIF or the router may isolate
+  Wi-Fi clients. Use manual setup only if you have the full **RTSP** or
+  **HTTP/MJPEG** stream URL; the IP address alone does not identify a stream.
+- V380 Pro is an app name and does not guarantee all associated models expose
+  ONVIF/RTSP. Model **AIT36106** has not been validated with CocinaP.
+- On iPhone, iOS may restrict multicast discovery; use a manual URL if the
+  model provides a compatible stream.
 
 ### Person detection doesn't alert
 

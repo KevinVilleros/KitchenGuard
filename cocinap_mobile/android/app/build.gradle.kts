@@ -1,7 +1,28 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val releaseSigningFile = rootProject.file("key.properties")
+val releaseSigningProperties = Properties()
+if (releaseSigningFile.isFile) {
+    releaseSigningFile.inputStream().use { releaseSigningProperties.load(it) }
+    val requiredProperties = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    val missingProperties = requiredProperties.filter {
+        releaseSigningProperties.getProperty(it).isNullOrBlank()
+    }
+    if (missingProperties.isNotEmpty()) {
+        throw GradleException(
+            "Missing ${missingProperties.joinToString()} in android/key.properties"
+        )
+    }
+    val keystore = rootProject.file(releaseSigningProperties.getProperty("storeFile"))
+    if (!keystore.isFile) {
+        throw GradleException("Android release keystore does not exist: $keystore")
+    }
 }
 
 android {
@@ -26,11 +47,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseSigningFile.isFile) {
+            create("release") {
+                keyAlias = releaseSigningProperties.getProperty("keyAlias")
+                keyPassword = releaseSigningProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(releaseSigningProperties.getProperty("storeFile"))
+                storePassword = releaseSigningProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigningFile.isFile) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "No android/key.properties found; release artifacts will be unsigned."
+                )
+            }
         }
     }
 }

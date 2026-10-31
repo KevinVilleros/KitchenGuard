@@ -5,6 +5,7 @@ import '../providers/tour_controller.dart';
 import '../services/settings_service.dart';
 import '../services/background_service.dart';
 import '../content/content.dart';
+import '../widgets/camera_url_dialog.dart';
 import 'help_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -25,7 +26,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final standalone = context.read<StandaloneProvider>();
     final settings = context.read<SettingsService>();
     standalone.setDurationMinutes(await settings.getStandaloneDuration());
-    standalone.setNoPersonAlertSeconds(await settings.getStandaloneNoPersonSeconds());
+    standalone
+        .setNoPersonAlertSeconds(await settings.getStandaloneNoPersonSeconds());
     standalone.setDangerMinutes(await settings.getStandaloneDangerMinutes());
     standalone.setConfidence(await settings.getStandaloneConfidence());
 
@@ -36,7 +38,8 @@ class _SettingsPageState extends State<SettingsPage> {
     standalone.setCameraUrl(await settings.getStandaloneCameraUrl());
 
     standalone.setAlertIntervals(await settings.getAlertIntervals());
-    standalone.setIntervalAlertsEnabled(await settings.getIntervalAlertsEnabled());
+    standalone
+        .setIntervalAlertsEnabled(await settings.getIntervalAlertsEnabled());
     final repeat = await settings.getAlertRepeatMode();
     standalone.setRepeatMode(repeat == 'oncePerInterval'
         ? AlertRepeatMode.oncePerInterval
@@ -66,7 +69,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   Text(
                     l("Avisa cuando la cocina lleva estos minutos sin persona. Ejemplo: 10, 15 y 20 min.",
-                      "Alert when kitchen has been without person for these minutes. Example: 10, 15, 20 min."),
+                        "Alert when kitchen has been without person for these minutes. Example: 10, 15, 20 min."),
                     style: const TextStyle(fontSize: 13),
                   ),
                   const SizedBox(height: 10),
@@ -78,7 +81,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
                             isDense: true,
-                            hintText: l("Minutos (ej. 25)", "Minutes (e.g. 25)"),
+                            hintText:
+                                l("Minutos (ej. 25)", "Minutes (e.g. 25)"),
                           ),
                         ),
                       ),
@@ -99,7 +103,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 12),
                   if (intervals.isEmpty)
                     Text(l("Sin intervalos", "No intervals"),
-                        style: const TextStyle(color: Colors.grey, fontSize: 13))
+                        style:
+                            const TextStyle(color: Colors.grey, fontSize: 13))
                   else
                     Wrap(
                       spacing: 8,
@@ -161,6 +166,64 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _chooseCameraSource(BuildContext context) async {
+    final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    final lang = AppLocal.language;
+    final source = await showDialog<StandaloneCameraSource>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(lang == "en" ? "Camera source" : "Fuente de cámara"),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, StandaloneCameraSource.phone),
+            child: Text(lang == "en" ? "Phone camera" : "Cámara del móvil"),
+          ),
+          SimpleDialogOption(
+            onPressed: () =>
+                Navigator.pop(ctx, StandaloneCameraSource.ipCamera),
+            child: Text(lang == "en" ? "IP camera" : "Cámara IP"),
+          ),
+        ],
+      ),
+    );
+    if (source == null || !context.mounted) return;
+
+    if (source == StandaloneCameraSource.ipCamera) {
+      final url = await showCameraUrlDialog(
+        context,
+        currentUrl: standalone.cameraUrl,
+        language: lang,
+      );
+      if (url == null || !context.mounted) return;
+      standalone.setCameraSource(source);
+      standalone.setCameraUrl(url);
+      await settings.setStandaloneCameraUrl(url);
+    }
+
+    if (source == StandaloneCameraSource.phone) {
+      standalone.setCameraSource(source);
+    }
+    await settings.setStandaloneSourceIndex(
+      source == StandaloneCameraSource.ipCamera ? 1 : 0,
+    );
+  }
+
+  Future<void> _editCameraUrl(BuildContext context) async {
+    final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    final url = await showCameraUrlDialog(
+      context,
+      currentUrl: standalone.cameraUrl,
+      language: AppLocal.language,
+    );
+    if (url == null || !context.mounted) return;
+    standalone.setCameraSource(StandaloneCameraSource.ipCamera);
+    standalone.setCameraUrl(url);
+    await settings.setStandaloneCameraUrl(url);
+    await settings.setStandaloneSourceIndex(1);
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = AppLocal.language;
@@ -188,13 +251,22 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(l("Fuente de cámara", "Camera source")),
             subtitle: Text(standalone.cameraSourceLabel),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: () => _chooseCameraSource(context),
           ),
+          if (standalone.cameraSource == StandaloneCameraSource.ipCamera)
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: Text(l("URL de cámara IP", "IP camera URL")),
+              subtitle: Text(cameraUrlDisplayLabel(standalone.cameraUrl)),
+              trailing: const Icon(Icons.edit),
+              onTap: () => _editCameraUrl(context),
+            ),
           const Divider(),
 
           // Duración del temporizador
           ListTile(
-            title: Text(l("Duración del monitoreo (min)", "Monitoring duration (min)")),
+            title: Text(
+                l("Duración del monitoreo (min)", "Monitoring duration (min)")),
             trailing: SizedBox(
               width: 90,
               child: TextField(
@@ -211,8 +283,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
           // Tiempo sin persona antes de alertar
           ListTile(
-            title: Text(l("Alertar si sin persona (seg)", "Alert if no person (sec)")),
-            subtitle: Text(l("Tiempo sin detectar persona para disparar alerta", "Time without detecting person to trigger alert")),
+            title: Text(
+                l("Alertar si sin persona (seg)", "Alert if no person (sec)")),
+            subtitle: Text(l("Tiempo sin detectar persona para disparar alerta",
+                "Time without detecting person to trigger alert")),
             trailing: SizedBox(
               width: 90,
               child: TextField(
@@ -230,7 +304,9 @@ class _SettingsPageState extends State<SettingsPage> {
           // Intervalos de alerta (cocina desatendida)
           SwitchListTile(
             title: Text(l("Alertas por intervalos", "Interval alerts")),
-            subtitle: Text(l("Avisa a los 10, 15, 20 min... sin persona en la cocina", "Alert at 10, 15, 20 min... without person in kitchen")),
+            subtitle: Text(l(
+                "Avisa a los 10, 15, 20 min... sin persona en la cocina",
+                "Alert at 10, 15, 20 min... without person in kitchen")),
             value: standalone.intervalAlertsEnabled,
             onChanged: (v) {
               standalone.setIntervalAlertsEnabled(v);
@@ -242,15 +318,14 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(l("Intervalos configurados", "Configured intervals")),
             subtitle: Text(standalone.sortedIntervals.isEmpty
                 ? l("Sin intervalos", "No intervals")
-                : standalone.sortedIntervals
-                    .map((m) => "$m min")
-                    .join(", ")),
+                : standalone.sortedIntervals.map((m) => "$m min").join(", ")),
             trailing: const Icon(Icons.edit),
             onTap: () => _editIntervals(context),
           ),
           ListTile(
             leading: const Icon(Icons.repeat),
-            title: Text(l("Repetición de la última alerta", "Repeat last alert")),
+            title:
+                Text(l("Repetición de la última alerta", "Repeat last alert")),
             subtitle: Text(standalone.repeatMode == AlertRepeatMode.repeatLast
                 ? l("Repetir el último intervalo", "Repeat last interval")
                 : l("Una sola vez por intervalo", "Once per interval")),
@@ -261,16 +336,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? AlertRepeatMode.repeatLast
                     : AlertRepeatMode.oncePerInterval;
                 standalone.setRepeatMode(mode);
-                settings.setAlertRepeatMode(
-                    v ? 'repeatLast' : 'oncePerInterval');
+                settings
+                    .setAlertRepeatMode(v ? 'repeatLast' : 'oncePerInterval');
               },
             ),
           ),
 
           // Tiempo peligroso estimado
           ListTile(
-            title: Text(l("Tiempo peligroso sin atender (min)", "Danger time unattended (min)")),
-            subtitle: Text(l("Se considera riesgo alto después de este tiempo", "High risk after this time")),
+            title: Text(l("Tiempo peligroso sin atender (min)",
+                "Danger time unattended (min)")),
+            subtitle: Text(l("Se considera riesgo alto después de este tiempo",
+                "High risk after this time")),
             trailing: SizedBox(
               width: 90,
               child: TextField(
@@ -292,7 +369,9 @@ class _SettingsPageState extends State<SettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l("Confianza detección persona: ", "Person detection confidence: ") + standalone.confidence.toStringAsFixed(2),
+                  l("Confianza detección persona: ",
+                          "Person detection confidence: ") +
+                      standalone.confidence.toStringAsFixed(2),
                   style: const TextStyle(fontSize: 14),
                 ),
                 Slider(
@@ -313,7 +392,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             leading: const Icon(Icons.notifications_active),
             title: Text(l("Notificaciones", "Notifications")),
-            subtitle: Text(l("Avisos locales con sonido y vibración", "Local alerts with sound and vibration")),
+            subtitle: Text(l("Avisos locales con sonido y vibración",
+                "Local alerts with sound and vibration")),
             trailing: FilledButton.tonalIcon(
               onPressed: BackgroundServiceManager.sendTestAlarm,
               icon: const Icon(Icons.notifications_active_outlined, size: 18),
@@ -331,7 +411,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             leading: const Icon(Icons.smartphone),
             title: Text(l("En el móvil (ML Kit)", "On-device (ML Kit)")),
-            subtitle: Text(l("El modelo se ejecuta en el dispositivo, sin enviar imágenes", "Runs on device, no images sent")),
+            subtitle: Text(l(
+                "El modelo se ejecuta en el dispositivo, sin enviar imágenes",
+                "Runs on device, no images sent")),
           ),
           const Divider(),
           ListTile(
@@ -345,15 +427,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             leading: const Icon(Icons.school_outlined),
             title: Text(l("Tour de la interfaz", "Interface tour")),
-            subtitle: Text(l("Repasa las pestañas y opciones principales", "Review tabs and main options")),
+            subtitle: Text(l("Repasa las pestañas y opciones principales",
+                "Review tabs and main options")),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.read<TourController>().start(),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.help_outline),
-            title: Text(l("Manual de uso, guía y términos", "Manual, guide & terms")),
-            subtitle: Text(l("Manual, guía de cámaras y términos", "Manual, camera guide & terms")),
+            title: Text(
+                l("Manual de uso, guía y términos", "Manual, guide & terms")),
+            subtitle: Text(l("Manual, guía de cámaras y términos",
+                "Manual, camera guide & terms")),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,

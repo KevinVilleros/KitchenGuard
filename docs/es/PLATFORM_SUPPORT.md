@@ -12,6 +12,8 @@ validación real en dispositivos.
 | App móvil | iOS | iOS 17.0+ | Código y build de CI preparados; requiere validación física |
 | Detección local | Android | Cámara disponible | Modelo TFLite integrado; probar con dispositivos compatibles |
 | Detección local | iPhone | Cámara disponible | Modelo y plugin ML Kit integrados; probar en iPhone real |
+| Cámara IP | Android | Cámara ONVIF/RTSP o HTTP/MJPEG en LAN | ONVIF y RTSP implementados; matriz física pendiente |
+| Cámara IP | iOS | Cámara ONVIF/RTSP o HTTP/MJPEG en LAN | RTSP/MJPEG implementado; descubrimiento multicast requiere QA en iPhone |
 | Backend opcional | Windows | Windows 10/11, Python 3.10+ | Empaquetado y CI Python disponibles |
 | Modo conectado | Android/iOS | Red local compartida | Requiere mDNS, QR o URL manual en ambas plataformas |
 
@@ -20,6 +22,10 @@ validación real en dispositivos.
 La configuración release se encuentra en `cocinap_mobile/android/app/build.gradle.kts`.
 El manifiesto declara Internet, cámara, servicio en primer plano, notificaciones
 y reinicio del dispositivo. Antes de publicar una release:
+
+**Bloqueo actual:** la configuración `release` todavía usa la firma `debug`.
+No distribuyas APK/AAB construidos con esa firma; configura y valida una clave
+de firma de producción fuera del repositorio.
 
 1. Ejecutar `flutter analyze` y `flutter test`.
 2. Compilar `flutter build apk --release` y `flutter build appbundle --release`.
@@ -51,7 +57,9 @@ Apple gratuita puede imponer una caducidad aproximada de siete días.
 | Permiso de cámara | Requerida | Requerida | Se explica antes de solicitarlo y puede denegarse |
 | Permiso de red local/notificaciones | Si aplica | Requerida | La función muestra el motivo y conserva un estado válido |
 | Detección en cámara móvil | Requerida | Requerida | Detecta/no detecta personas según pruebas documentadas |
-| Cámara IP/MJPEG | Recomendada | Recomendada | Reproduce el stream sin bloqueos |
+| Cámara IP/MJPEG | Requerida | Requerida | Reproduce el stream sin bloqueos |
+| Descubrimiento ONVIF | Requerida para cámaras ONVIF | Requerida para cámaras ONVIF | Cámara en la misma LAN; validar multicast/permiso local en iPhone |
+| Cámara IP/RTSP | Requerida | Requerida | Video y detección estables con credenciales correctas |
 | Conexión al backend | Recomendada | Recomendada | QR, mDNS y conexión manual funcionan |
 | Rotación de pantalla | Requerida | Requerida | La interfaz no pierde estado ni corta controles |
 | Suspensión/resumen | Requerida | Requerida | Retoma sin errores o detiene de forma controlada |

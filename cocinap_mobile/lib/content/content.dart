@@ -93,24 +93,22 @@ class AppManual {
 class CameraGuide {
   static const List<TextPair> steps = [
     TextPair(
-      "Encuentra la URL HTTP/MJPEG de tu cámara",
-      "Find your camera HTTP/MJPEG URL",
+      "Busca tu cámara ONVIF o añade su URL",
+      "Find your ONVIF camera or add its URL",
     ),
     TextPair(
-      "La mayoría de cámaras de seguridad tienen un stream MJPEG por HTTP. "
-      "Busca en el manual o con la herramienta ONVIF Device Manager. Suelen ser: "
-      "http://IP/video.cgi?resolution=640x360, http://IP/stream, "
-      "http://IP:port/video/mjpg.cgi, http://IP/snapshot.cgi. Puedes probar en "
-      "el navegador o con VLC (Medio → Abrir URL de red).",
-      "Most security cameras have an MJPEG stream over HTTP. Look in the manual "
-      "or use the ONVIF Device Manager tool. They are usually: "
-      "http://IP/video.cgi?resolution=640x360, http://IP/stream, "
-      "http://IP:port/video/mjpg.cgi, http://IP/snapshot.cgi. You can test in "
-      "the browser or with VLC (Media → Open Network Stream).",
+      "En 'Ajustes' > 'Fuente de cámara', toca 'Buscar cámaras en este Wi-Fi'. "
+      "El teléfono y la cámara deben estar en la misma red y ONVIF debe estar "
+      "habilitado. Si no aparece, puedes introducir manualmente una URL "
+      "HTTP/MJPEG o RTSP del manual o la app de la cámara.",
+      "In 'Settings' > 'Camera source', tap 'Find cameras on this Wi-Fi'. "
+      "The phone and camera must be on the same network and ONVIF must be "
+      "enabled. If it is not found, enter an HTTP/MJPEG or RTSP stream URL "
+      "from the camera manual or app.",
     ),
     TextPair(
-      "Añade credenciales si las necesita",
-      "Add credentials if needed",
+      "Ten a mano las credenciales de la cámara",
+      "Have your camera credentials ready",
     ),
     TextPair(
       "Muchas cámaras piden usuario y contraseña en la URL: "
@@ -125,11 +123,14 @@ class CameraGuide {
       "Configure the IP camera in Settings",
     ),
     TextPair(
-      "En 'Ajustes', en 'Fuente de cámara', elige 'Cámara IP (hogar/seguridad)' "
-      "y pega la URL HTTP/MJPEG. Vuelve a 'Monitoreo' y deberías ver la imagen.",
-      "In 'Settings', under 'Camera source', choose 'IP camera (home/security)' "
-      "and paste the HTTP/MJPEG URL. Go back to 'Monitoring' and you should see "
-      "the image.",
+      "Selecciona la cámara encontrada e introduce sus credenciales. Se usan "
+      "localmente para obtener el video y se guardan de forma segura en el "
+      "dispositivo. También puedes introducir una URL HTTP/MJPEG o RTSP "
+      "completa. Vuelve a 'Monitoreo' para ver la imagen.",
+      "Select a discovered camera and enter its credentials. They are used "
+      "locally to obtain video and stored securely on this device. You can "
+      "also enter a full HTTP/MJPEG or RTSP URL. Go back to 'Monitoring' to "
+      "view the image.",
     ),
   ];
 
@@ -147,24 +148,27 @@ class AppTerms {
     ),
     TextPair(
       "CocinaP es una herramienta de ayuda para la seguridad en la cocina. "
-      "No sustituye la supervisión humana. No dejes ollas ni fuego encendido "
-      "cerca de superficies inflamables y revisa tu cocina regularmente.",
+      "No es un sistema certificado de detección de incendios ni sustituye la "
+      "supervisión humana. La detección puede fallar y depende de la cámara, "
+      "la red, la batería y los permisos. No dejes ollas ni fuego encendido "
+      "sin supervisión y mantén detectores de humo certificados.",
       "CocinaP is an aid tool for kitchen safety. It does not replace human "
-      "supervision. Do not leave pots or fire near flammable surfaces and "
-      "check your kitchen regularly.",
+      "supervision or act as a certified fire detection system. Detection can "
+      "fail and depends on the camera, network, battery and permissions. Do "
+      "not leave cooking unattended and keep certified smoke alarms installed.",
     ),
     TextPair(
       "Privacidad y datos",
       "Privacy and data",
     ),
     TextPair(
-      "Las imágenes de las cámaras se procesan en tu dispositivo y no se "
-      "suben a servidores externos salvo que configures notificaciones push. "
-      "El modelo de detección se ejecuta localmente. Los datos de "
-      "configuración se guardan únicamente en tu dispositivo.",
-      "Camera images are processed on your device and are not uploaded to "
-      "external servers unless you configure push notifications. The detection "
-      "model runs locally. Configuration data is stored only on your device.",
+      "El análisis de presencia se ejecuta en tu dispositivo. Si conectas una "
+      "cámara IP o el servidor CocinaP de tu PC, la app intercambia los datos "
+      "necesarios directamente con esos dispositivos en tu red. No usamos un "
+      "servicio de video en la nube.",
+      "Person detection runs on your device. If you connect an IP camera or "
+      "your CocinaP PC server, the app exchanges the required data directly "
+      "with those devices on your network. We do not use a cloud video service.",
     ),
     TextPair(
       "Responsabilidad del usuario",
@@ -172,11 +176,13 @@ class AppTerms {
     ),
     TextPair(
       "Eres responsable de la seguridad física de tu hogar. CocinaP ofrece "
-      "avisos, pero no puede evitar un incendio ni actuar por ti. Mantén "
-      "extintores, detectores de humo y medidas de prevención vigentes.",
+      "avisos que pueden llegar tarde o no producirse, pero no puede evitar "
+      "un incendio ni actuar por ti. Mantén extintores, detectores de humo "
+      "certificados y medidas de prevención vigentes.",
       "You are responsible for the physical safety of your home. CocinaP "
-      "provides alerts but cannot prevent a fire or act on your behalf. Keep "
-      "fire extinguishers, smoke detectors and prevention measures in place.",
+      "provides alerts that may be delayed or fail, but cannot prevent a fire "
+      "or act on your behalf. Keep fire extinguishers, certified smoke alarms "
+      "and prevention measures in place.",
     ),
     TextPair(
       "Cámaras de terceros",

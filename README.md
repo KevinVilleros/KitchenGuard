@@ -13,7 +13,7 @@ or IP cameras, across Android and iOS.**
 [![Dart](https://img.shields.io/badge/Dart-3.2+-0175C2?style=flat-square&logo=dart&logoColor=white)](https://dart.dev)
 [![TFLite](https://img.shields.io/badge/TensorFlow_Lite-2.x-FF6F00?style=flat-square&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/lite)
 [![License](https://img.shields.io/badge/License-Commercial-red?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.1-orange?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.0.2--pre-orange?style=flat-square)](CHANGELOG.md)
 
 </div>
 
@@ -35,7 +35,7 @@ PC camera footage, fire and smoke alarms, and remote configuration controls.
 |---|---|
 | Standalone monitoring | Phone camera or IP camera monitoring |
 | On-device detection | SSD MobileNet V2/TFLite without cloud processing |
-| IP camera support | HTTP/MJPEG home and security camera streams |
+| IP camera support | Local ONVIF discovery; RTSP and HTTP/MJPEG streams |
 | Monitoring timer | Configurable duration, pause and unattended alerts |
 | Local alarms | Sound and vibration alerts |
 | PC connection | QR scanning, mDNS discovery and manual configuration |
@@ -55,6 +55,11 @@ PC camera footage, fire and smoke alarms, and remote configuration controls.
 See the [platform support matrix](docs/en/PLATFORM_SUPPORT.md) for acceptance
 criteria and the [iOS installation guide](docs/INSTALL_IOS_WINDOWS.es.md) for
 cloud build and Sideloadly installation.
+
+> **Pre-release:** network-camera compatibility and store-distribution checks
+> are still in progress. ONVIF discovery only finds cameras that advertise
+> ONVIF on the same local network; not every V380 Pro camera exposes ONVIF or
+> RTSP. See the [camera compatibility and release checklist](docs/en/ROADMAP.md).
 
 ## Quick start
 

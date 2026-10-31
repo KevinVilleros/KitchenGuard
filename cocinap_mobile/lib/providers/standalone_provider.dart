@@ -7,7 +7,7 @@ import '../content/content.dart';
 enum StandaloneCameraSource {
   /// Cámara integrada / USB del propio móvil.
   phone,
-  /// Cámara IP del hogar o de seguridad vía stream HTTP/MJPEG.
+  /// Cámara IP del hogar o de seguridad vía stream HTTP/MJPEG o RTSP.
   ipCamera,
 }
 

@@ -29,12 +29,40 @@ Run a single test:
 flutter test test/widget_test.dart
 ```
 
+Focused network/camera tests:
+
+```bash
+flutter test test/mjpeg_frame_parser_test.dart test/onvif_camera_service_test.dart
+```
+
+These cover MJPEG frame parsing and ONVIF response filtering to accept local
+endpoints and reject remote targets or URLs with embedded credentials. They do
+not replace physical testing of ONVIF negotiation, authentication, RTSP video,
+per-model compatibility or network-loss recovery.
+
 Coverage:
 
 ```bash
 flutter test --coverage
 # generates coverage/lcov.info
 ```
+
+### Android production signing
+
+The `release` build type no longer uses the debug key. Without signing
+configuration, Gradle produces an unsigned `release` artifact and prints a
+warning; that artifact cannot be uploaded to Google Play.
+
+1. Create and store an upload key outside the repository. Keep it secure and
+   retain a backup; losing it can prevent future app updates.
+2. Create `cocinap_mobile/android/key.properties` with `storeFile`,
+   `storePassword`, `keyAlias` and `keyPassword`. `storeFile` is relative to
+   `cocinap_mobile/android`; for example, `upload-keystore.jks` if the file is
+   stored there.
+3. Keep both `key.properties` and the `.jks` or `.keystore` file out of Git.
+   Never share passwords or keys in source code, chat or CI logs.
+4. Build the AAB with `flutter build appbundle --release` and verify its
+   signature before uploading it to Play Console.
 
 ---
 
@@ -89,23 +117,32 @@ Workflows in `.github/workflows/`:
 |---|---|
 | Trigger | push to `main`/`master` touching `cocinap_mobile/**` or `.github/workflows/ios.yml`; or manual (`workflow_dispatch`) |
 | Runners | `ubuntu-latest` for Android and `macos-latest` for iOS |
-| Jobs | `build-android` (APK), `build-unsigned` (unsigned `.ipa`) and `build-signed` (optional) |
-| Artifacts | `CocinaP-Android` (contains `app-release.apk`) and `CocinaP-iOS` (contains `CocinaP-unsigned.ipa`) |
+| Jobs | `validate-mobile` (analyze and tests), `build-android` (unsigned APK), `build-unsigned` (unsigned `.ipa`) and `build-signed` (optional) |
+| Artifacts | `CocinaP-Android-unsigned` (contains `app-release.apk`) and `CocinaP-iOS` (contains `CocinaP-unsigned.ipa`) |
+
+Both platform builds depend on `validate-mobile`. The workflow runs
+`flutter analyze` and `flutter test` before producing platform artifacts.
 
 ### Android
 
-The `build-android` job installs Java 17, sets up stable Flutter, fetches
-dependencies and runs `flutter build apk --release`. The APK is published when
-that build succeeds, even if a later iOS build fails.
+The `build-android` job waits for validation, installs Java 17, sets up stable
+Flutter, fetches dependencies and runs `flutter build apk --release`. Android
+production signing is not configured in this workflow, so it produces an
+unsigned APK that is not ready for store distribution. The
+`CocinaP-Android-unsigned` artifact is published when that build succeeds, even
+if a later iOS build fails.
 
-Main job steps:
+Main Android job steps:
 
 1. `checkout`.
-2. `subosito/flutter-action` (stable channel).
-3. `flutter pub get`.
-4. `flutter build ios --release --no-codesign`.
-5. Package `Payload/` → `CocinaP-unsigned.ipa`.
-6. Upload the artifact.
+2. `actions/setup-java` (Java 17).
+3. `subosito/flutter-action` (stable channel).
+4. `flutter pub get`.
+5. `flutter build apk --release`.
+6. Upload the unsigned APK artifact.
+
+The `build-unsigned` job builds and packages the iOS app as
+`CocinaP-unsigned.ipa`.
 
 The `build-signed` job only signs when the secrets `IOS_CERTIFICATE`,
 `IOS_CERTIFICATE_PASSWORD` and `IOS_PROVISIONING_PROFILE` are set; otherwise it
@@ -154,6 +191,13 @@ is skipped.
 - [ ] `flutter test` green.
 - [ ] APK and IPA reproducible from documented artifacts.
 - [ ] Android and iPhone matrix completed on physical devices.
+- [ ] Real ONVIF, RTSP and MJPEG camera matrix tested and published; record
+  incompatible models and negative test results.
+- [ ] Review libmpv, FFmpeg/codec and native dependency licenses/notices before
+  commercial distribution.
+- [ ] Configure production signing; do not use the `debug` key.
+- [ ] Complete and legally review the privacy policy, publisher identity and
+  app-store listings.
 - [ ] Camera, local-network and background permissions tested on-device.
 - [ ] Known defects include an owner, impact and correction plan.
 - [ ] `ruff check` and `pytest` green (backend).

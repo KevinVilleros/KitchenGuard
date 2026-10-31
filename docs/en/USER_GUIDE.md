@@ -53,8 +53,15 @@ In **Monitoring**, tap the **Devices** icon (top bar) or the
 **"Change device or camera"** button. A sheet opens with the sources:
 
 - **Phone camera:** uses the phone camera.
-- **IP camera:** enter the stream URL (e.g. `http://192.168.1.50:8080/video` or
-  an MJPEG URL).
+- **IP camera:** tap **Configure** to find ONVIF cameras on your Wi-Fi. The
+  phone and camera must be on the same network with ONVIF enabled. Select the
+  camera and enter its credentials. If it is not found, enter a full HTTP/MJPEG
+  or RTSP URL from the camera manual or app; an IP address alone is not enough.
+  iOS may restrict automatic multicast discovery. Credentials are stored
+  securely on the device. ONVIF and RTSP may use different credentials; enter
+  the RTSP credentials when prompted. If ONVIF fails, you can try the RTSP
+  `/stream2` path; confirm that it works for your camera and edit the URL if
+  needed.
 - **PC with CocinaP:** if connected, opens the PC camera; otherwise it takes you
   to **Connect**.
 
@@ -135,8 +142,9 @@ unattended cooking with sound and vibration.
 
 - **Camera placement:** cover the whole cooking area, with good light and no
   obstacles.
-- **IP camera:** use an MJPEG URL reachable from the local network; avoid
-  cameras that only expose RTSP (the phone uses MJPEG).
+- **IP camera:** ONVIF discovery searches the local network. If the camera is
+  not found, check that ONVIF is enabled and both devices are on the same Wi-Fi;
+  you can also enter its HTTP/MJPEG or RTSP URL manually.
 - **Battery:** camera monitoring drains battery; keep the phone charging for long
   sessions.
 - **Fire and smoke:** require the PC to be connected (the phone alone detects

@@ -44,7 +44,7 @@ class BackgroundServiceManager {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
-          const AndroidNotificationChannel(
+          AndroidNotificationChannel(
             _fgChannelId,
             _fgChannelName,
             description: AppLocal.language == 'en'
@@ -59,7 +59,7 @@ class BackgroundServiceManager {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
-          const AndroidNotificationChannel(
+          AndroidNotificationChannel(
             _alarmChannelId,
             _alarmChannelName,
             description: AppLocal.language == 'en'

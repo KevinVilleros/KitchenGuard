@@ -56,6 +56,7 @@ default.
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | EN | Community standards |
 | [LICENSE](../LICENSE) | EN/ES | Commercial license |
 | [Privacy policy](legal/PRIVACY_POLICY.en.md) | EN + ES | Local-processing privacy policy |
+| [Third-party notices](legal/THIRD_PARTY_NOTICES.md) | EN | Preliminary native player license review |
 | [iOS from Windows](INSTALL_IOS_WINDOWS.es.md) | Spanish | Build and install with GitHub Actions |
 | [Mobile app README](../cocinap_mobile/README.md) | EN + ES | Android and iPhone app |
 | [Archived YOLO backend](../yolo/README.md) | EN + ES | Optional Python/Windows backend |

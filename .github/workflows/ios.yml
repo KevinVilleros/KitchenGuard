@@ -1,7 +1,7 @@
 name: Mobile Builds CocinaP
 
 # Genera los artefactos móviles Android y iOS en la misma ejecución.
-# - job "Build APK (Android)": APK release listo para instalar.
+# - job "Build APK (Android)": APK release sin firmar, solo para validación.
 # - job "Build IPA (unsigned)": IPA sin firmar para Sideloadly.
 # - job "Build IPA (signed)": requiere secrets de certificado Apple (opcional).
 
@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
+    tags: ['v*']
     paths:
       - 'cocinap_mobile/**'
       - '.github/workflows/ios.yml'
@@ -17,9 +18,32 @@ permissions:
   contents: write
 
 jobs:
+  validate-mobile:
+    name: Analyze and test (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cocinap_mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze
+
+      - name: Flutter tests
+        run: flutter test
+
   build-unsigned:
     name: Build IPA (unsigned)
     runs-on: macos-latest
+    needs: validate-mobile
     defaults:
       run:
         working-directory: cocinap_mobile
@@ -100,6 +124,7 @@ jobs:
   build-android:
     name: Build APK (Android)
     runs-on: ubuntu-latest
+    needs: validate-mobile
     defaults:
       run:
         working-directory: cocinap_mobile
@@ -124,7 +149,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CocinaP-Android
+          name: CocinaP-Android-unsigned
           path: cocinap_mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
@@ -193,3 +218,40 @@ jobs:
           name: CocinaP-iOS-signed
           path: cocinap_mobile/build/ios/ipa/*.ipa
           if-no-files-found: error
+
+  publish-release:
+    name: Publish unsigned mobile installers
+    runs-on: ubuntu-latest
+    needs: [build-unsigned, build-android]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download iOS IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: CocinaP-iOS
+          path: artifacts/ios
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: CocinaP-Android-unsigned
+          path: artifacts/android
+
+      - name: Prepare release assets
+        run: |
+          cp artifacts/ios/CocinaP-unsigned.ipa CocinaP-iOS-unsigned.ipa
+          cp artifacts/android/app-release.apk CocinaP-Android-unsigned.apk
+
+      - name: Attach installers to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "CocinaP $GITHUB_REF_NAME" \
+              --notes "Unsigned Android APK and iOS IPA for testing. The APK is not production-signed; the IPA requires sideloading."
+          fi
+          gh release upload "$GITHUB_REF_NAME" \
+            CocinaP-iOS-unsigned.ipa \
+            CocinaP-Android-unsigned.apk \
+            --clobber
