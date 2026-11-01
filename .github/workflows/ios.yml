@@ -1,9 +1,9 @@
 name: Mobile Builds CocinaP
 
-# Genera los artefactos móviles Android y iOS en la misma ejecución.
-# - job "Build APK (Android)": APK release sin firmar, solo para validación.
-# - job "Build IPA (unsigned)": IPA sin firmar para Sideloadly.
-# - job "Build IPA (signed)": requiere secrets de certificado Apple (opcional).
+# Genera los artefactos móviles y publica instaladores utilizables cuando hay firma.
+# - Android: APK debug firmado para instalación de prueba.
+# - iOS: IPA ad-hoc firmado solo si se configuran certificado y perfil Apple.
+# - IPA sin firmar: artefacto de compilación, no es una app instalable directamente.
 
 on:
   workflow_dispatch:
@@ -127,7 +127,7 @@ jobs:
           if-no-files-found: error
 
   build-android:
-    name: Build APK (Android)
+    name: Build signed debug APK (Android)
     runs-on: ubuntu-latest
     needs: validate-mobile
     defaults:
@@ -149,13 +149,13 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build Android APK
-        run: flutter build apk --release
+      - name: Build installable Android debug APK
+        run: flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CocinaP-Android-unsigned
-          path: cocinap_mobile/build/app/outputs/flutter-apk/app-release.apk
+          name: CocinaP-Android-debug
+          path: cocinap_mobile/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
 
   build-signed:
@@ -175,7 +175,7 @@ jobs:
       - name: Comprobar certificado configurado
         run: |
           if [ -z "$IOS_CERTIFICATE" ] || [ -z "$IOS_CERTIFICATE_PASSWORD" ] || [ -z "$IOS_PROVISIONING_PROFILE" ]; then
-            echo "::notice::Certificado iOS no configurado. Job saltado (usa un .ipa sin firmar con Sideloadly)."
+            echo "::notice::Firma iOS no configurada. No se publicará un IPA instalable."
             exit 0
           fi
         env:
@@ -211,7 +211,7 @@ jobs:
       - name: Build signed IPA (genera pods y compila)
         run: |
           if [ ! -f cert.p12 ]; then
-            echo "Sin certificado. Usa el job 'Build IPA (unsigned)'."
+            echo "Sin certificado Apple y perfil de aprovisionamiento; no se puede crear un IPA instalable."
             exit 0
           fi
           flutter build ipa --release --export-method ad-hoc
@@ -225,9 +225,9 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    name: Publish unsigned mobile installers
+    name: Publish installable mobile builds
     runs-on: ubuntu-latest
-    needs: [build-unsigned, build-android]
+    needs: [build-unsigned, build-android, build-signed]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     steps:
       - name: Download iOS IPA
@@ -239,13 +239,25 @@ jobs:
       - name: Download Android APK
         uses: actions/download-artifact@v4
         with:
-          name: CocinaP-Android-unsigned
+          name: CocinaP-Android-debug
           path: artifacts/android
+
+      - name: Download signed iOS IPA if available
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: CocinaP-iOS-signed
+          path: artifacts/ios-signed
 
       - name: Prepare release assets
         run: |
-          cp artifacts/ios/CocinaP-unsigned.ipa CocinaP-iOS-unsigned.ipa
-          cp artifacts/android/app-release.apk CocinaP-Android-unsigned.apk
+          cp artifacts/android/app-debug.apk CocinaP-Android-debug.apk
+          if [ -d artifacts/ios-signed ]; then
+            ipa="$(find artifacts/ios-signed -maxdepth 2 -type f -name '*.ipa' -print -quit)"
+            if [ -n "$ipa" ]; then
+              cp "$ipa" CocinaP-iOS-signed.ipa
+            fi
+          fi
 
       - name: Create release and attach installers
         uses: actions/github-script@v7
@@ -256,10 +268,21 @@ jobs:
           script: |
             const fs = require('node:fs');
             const assets = [
-              { path: 'CocinaP-iOS-unsigned.ipa', name: 'CocinaP-iOS-unsigned.ipa' },
-              { path: 'CocinaP-Android-unsigned.apk', name: 'CocinaP-Android-unsigned.apk' },
+              { path: 'CocinaP-Android-debug.apk', name: 'CocinaP-Android-debug.apk' },
             ];
+            if (fs.existsSync('CocinaP-iOS-signed.ipa')) {
+              assets.push({
+                path: 'CocinaP-iOS-signed.ipa',
+                name: 'CocinaP-iOS-signed.ipa',
+              });
+            }
             const releaseTag = process.env.RELEASE_TAG;
+            const body = [
+              'Android: debug-signed APK for direct testing. To install over a copy signed with a different key, uninstall the old app first; this erases its local data. This is not a Play Store production build.',
+              fs.existsSync('CocinaP-iOS-signed.ipa')
+                ? 'iOS: ad-hoc signed IPA. It installs only on devices included in the Apple provisioning profile.'
+                : 'iOS: no IPA attached because Apple signing credentials and a provisioning profile are not configured. An unsigned IPA cannot be installed directly.',
+            ].join('\n\n');
             let release;
             try {
               ({ data: release } = await github.rest.repos.createRelease({
@@ -267,7 +290,7 @@ jobs:
                 repo: context.repo.repo,
                 tag_name: releaseTag,
                 name: `CocinaP ${releaseTag}`,
-                body: 'Unsigned Android APK and iOS IPA for testing. The APK is not production-signed; the IPA requires sideloading.',
+                body,
               }));
             } catch (error) {
               if (error.status !== 422) throw error;
@@ -282,7 +305,12 @@ jobs:
               { owner: context.repo.owner, repo: context.repo.repo, release_id: release.id },
             );
             for (const asset of existing) {
-              if (assets.some(({ name }) => name === asset.name)) {
+              if ([
+                'CocinaP-Android-unsigned.apk',
+                'CocinaP-iOS-unsigned.ipa',
+                'CocinaP-Android-debug.apk',
+                'CocinaP-iOS-signed.ipa',
+              ].includes(asset.name)) {
                 await github.rest.repos.deleteReleaseAsset({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -303,5 +331,43 @@ jobs:
                   'content-length': size,
                 },
               });
+            }
+            if (releaseTag === 'v1.0.8') {
+              const { data: previousRelease } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: 'v1.0.7',
+              }).catch((error) => {
+                if (error.status === 404) return { data: null };
+                throw error;
+              });
+              if (previousRelease) {
+                const previousAssets = await github.paginate(
+                  github.rest.repos.listReleaseAssets,
+                  {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: previousRelease.id,
+                  },
+                );
+                for (const asset of previousAssets) {
+                  if ([
+                    'CocinaP-Android-unsigned.apk',
+                    'CocinaP-iOS-unsigned.ipa',
+                  ].includes(asset.name)) {
+                    await github.rest.repos.deleteReleaseAsset({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      asset_id: asset.id,
+                    });
+                  }
+                }
+                await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: previousRelease.id,
+                  body: 'The original unsigned files in this release are not directly installable. Use v1.0.8 for an Android test APK. iOS requires Apple signing and a provisioning profile.',
+                });
+              }
             }
             core.info(`Published release ${releaseTag}: ${release.html_url}`);

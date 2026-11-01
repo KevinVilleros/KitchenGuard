@@ -7,6 +7,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ---
 
+## [1.0.8] - Unreleased
+
+### Fixed
+
+- Publish an Android debug-signed APK that can be installed directly for
+  testing instead of an unsigned release APK.
+- Do not advertise an unsigned iOS package as an installable release; attach an
+  iOS IPA only when Apple signing and a device provisioning profile are set up.
+
+### Changed
+
+- Advance the mobile package version to `1.0.8+8`.
+
+---
+
 ## [1.0.7] - Unreleased
 
 ### Changed

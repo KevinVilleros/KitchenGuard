@@ -1,7 +1,7 @@
 # Third-party notices — preliminary review
 
 This is a preliminary inventory of the native video-player dependency in
-CocinaP mobile version `1.0.7+7`. It is not legal advice or a completed
+CocinaP mobile version `1.0.8+8`. It is not legal advice or a completed
 software bill of materials. Recheck the resolved versions and native artifacts
 for every release.
 
