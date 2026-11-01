@@ -163,6 +163,7 @@ servidores externos. Ver [Política de privacidad](../legal/PRIVACY_POLICY.es.md
 
 - **Idioma:** Español por defecto, cambia a English en Ajustes.
 - **Notificaciones:** Android permite avisos en segundo plano; iOS solo con la
-  app abierta.
-- **Reconexión:** al iniciar, la app intenta conectarse al último servidor y, si
-  falla, busca en la red.
+  app abierta. iOS también suspende el video de la cámara IP al salir de la app.
+- **Reconexión de cámara:** el stream IP se reintenta automáticamente y puedes
+  usar el botón de actualizar. Al volver a la app, se reconecta si iOS o Android
+  había pausado el video.

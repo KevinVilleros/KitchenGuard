@@ -360,14 +360,30 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
                     ],
                   )
                 : _cameras.isEmpty
-                    ? Text(
-                        Platform.isIOS
-                            ? (english
-                                ? 'No ONVIF cameras found. Make sure the camera and phone are on the same Wi-Fi and ONVIF is enabled. iOS may restrict automatic multicast discovery; you can still enter the stream URL manually.'
-                                : 'No se encontraron cámaras ONVIF. Comprueba que la cámara y el teléfono estén en el mismo Wi-Fi y que ONVIF esté habilitado. iOS puede limitar la búsqueda multicast automática; también puedes escribir la URL manualmente.')
-                            : (english
-                                ? 'No ONVIF cameras found. Make sure the camera and phone are on the same Wi-Fi and that ONVIF is enabled. You can still enter the stream URL manually.'
-                                : 'No se encontraron cámaras ONVIF. Comprueba que la cámara y el teléfono estén en el mismo Wi-Fi y que ONVIF esté habilitado. También puedes escribir la URL manualmente.'),
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            Platform.isIOS
+                                ? (english
+                                    ? 'This iPhone build cannot discover ONVIF cameras automatically: Apple requires a separately approved multicast-network entitlement, which is not included. Make sure both devices use the same Wi-Fi, then return and enter the camera RTSP URL manually.'
+                                    : 'Esta versión para iPhone no puede buscar cámaras ONVIF automáticamente: Apple exige una autorización especial para multicast que no está incluida. Conecta ambos dispositivos al mismo Wi-Fi, vuelve y escribe manualmente la URL RTSP de la cámara.')
+                                : (english
+                                    ? 'No ONVIF cameras found. Make sure the camera and phone are on the same Wi-Fi and that ONVIF is enabled. You can still enter the stream URL manually.'
+                                    : 'No se encontraron cámaras ONVIF. Comprueba que la cámara y el teléfono estén en el mismo Wi-Fi y que ONVIF esté habilitado. También puedes escribir la URL manualmente.'),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.link),
+                            label: Text(
+                              english
+                                  ? 'Back to manual camera URL'
+                                  : 'Volver a escribir la URL',
+                            ),
+                          ),
+                        ],
                       )
                     : SizedBox(
                         height: 240,

@@ -154,7 +154,9 @@ Sideloadly with a free account signs for 7 days. A paid certificate avoids the
 expiry.
 
 **Does it work in the background?**
-Android yes (foreground service). iOS only while the app is open.
+Android uses a foreground service and can reconnect the video when you return
+to the app. iOS suspends the camera connection in the background: keep the app
+open and return to it to reconnect the stream.
 
 **Can I use multiple cameras?**
 You can switch between the phone camera, an IP camera and the PC from

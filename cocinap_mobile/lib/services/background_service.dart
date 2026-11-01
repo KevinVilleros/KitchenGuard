@@ -84,7 +84,7 @@ class BackgroundServiceManager {
             ? 'Monitoring kitchen...'
             : 'Monitoreando cocina...',
         foregroundServiceNotificationId: _notifId,
-        foregroundServiceTypes: [AndroidForegroundType.dataSync, AndroidForegroundType.camera],
+        foregroundServiceTypes: [AndroidForegroundType.dataSync],
       ),
       iosConfiguration: IosConfiguration(
         onForeground: onStart,

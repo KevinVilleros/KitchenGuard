@@ -154,7 +154,9 @@ Sideloadly con cuenta gratuita firma por 7 días. Un certificado de pago evita l
 caducidad.
 
 **¿Funciona en segundo plano?**
-Android sí (servicio en primer plano). iOS solo con la app abierta.
+Android usa un servicio en primer plano y puede reconectar el video al volver a
+la app. iOS suspende la conexión de cámara en segundo plano: mantén la app
+abierta y vuelve a ella para reconectar el stream.
 
 **¿Puedo usar varias cámaras?**
 Puedes cambiar entre cámara del móvil, IP y PC desde **Monitoreo**.

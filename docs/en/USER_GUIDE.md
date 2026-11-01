@@ -163,6 +163,7 @@ external servers. See the [Privacy policy](../legal/PRIVACY_POLICY.en.md).
 
 - **Language:** Spanish by default; switch to English in Settings.
 - **Notifications:** Android allows background alerts; iOS only while the app is
-  open.
-- **Reconnect:** on startup the app tries the last server and, if it fails,
-  searches the network.
+  open. iOS also suspends IP camera video when you leave the app.
+- **Camera reconnect:** the IP stream retries automatically, and you can use
+  the refresh button. Returning to the app reconnects video if iOS or Android
+  paused it.

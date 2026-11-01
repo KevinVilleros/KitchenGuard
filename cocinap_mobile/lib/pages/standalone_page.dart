@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/standalone_provider.dart';
 import '../services/person_detector.dart';
 import '../services/background_service.dart';
@@ -18,6 +19,22 @@ import '../content/content.dart';
 
 @visibleForTesting
 const rtspDetectionCaptureInterval = Duration(seconds: 1);
+
+@visibleForTesting
+Duration cameraReconnectDelay(int attempt) {
+  const delays = [
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+    Duration(seconds: 20),
+    Duration(seconds: 30),
+  ];
+  return delays[attempt.clamp(0, delays.length - 1).toInt()];
+}
+
+@visibleForTesting
+const rtspLavfOptions =
+    'protocol_whitelist=[rtsp,udp,rtp,tcp,tls,data,file,http,https,crypto],rtsp_transport=tcp';
 
 @visibleForTesting
 const rtspCameraPlayerConfiguration = PlayerConfiguration(
@@ -47,7 +64,8 @@ class StandalonePage extends StatefulWidget {
   State<StandalonePage> createState() => _StandalonePageState();
 }
 
-class _StandalonePageState extends State<StandalonePage> {
+class _StandalonePageState extends State<StandalonePage>
+    with WidgetsBindingObserver {
   String get lang => AppLocal.language;
   CameraController? _camera;
   CameraDescription? _cameraDescription;
@@ -56,14 +74,30 @@ class _StandalonePageState extends State<StandalonePage> {
   StreamSubscription<List<int>>? _ipStreamSub;
   StreamSubscription<String>? _rtspErrorSub;
   StreamSubscription<VideoParams>? _rtspVideoParamsSub;
+  StreamSubscription<Duration>? _rtspPositionSub;
+  StreamSubscription<bool>? _rtspBufferingSub;
   HttpClient? _ipHttpClient;
   Player? _rtspPlayer;
   VideoController? _rtspController;
   Timer? _rtspFrameTimer;
+  Timer? _cameraHealthTimer;
+  Timer? _cameraRetryTimer;
   Timer? _rtspConnectTimeout;
   bool _rtspScreenshotInFlight = false;
   bool _rtspVideoReady = false;
+  bool _rtspPositionAdvanced = false;
+  bool _cameraRestarting = false;
   int _cameraGeneration = 0;
+  int _cameraRetryAttempt = 0;
+  Duration? _rtspLastPosition;
+  DateTime? _rtspLastProgressAt;
+  DateTime? _rtspBufferingStartedAt;
+  DateTime? _ipStreamStartedAt;
+  DateTime? _ipLastFrameAt;
+  String? _cameraRetryMessage;
+  bool _wasBackgrounded = false;
+  bool _lastTimerRunning = false;
+  bool _lastTimerPaused = false;
   bool _cameraError = false;
   String? _cameraErrorMessage;
   bool _detectorLoading = false;
@@ -89,14 +123,18 @@ class _StandalonePageState extends State<StandalonePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadDetector();
     _initVideo();
     _startAlertLoop();
     final standalone = context.read<StandaloneProvider>();
     _lastSource = standalone.cameraSource;
     _lastUrl = standalone.cameraUrl;
+    _lastTimerRunning = standalone.timerRunning;
+    _lastTimerPaused = standalone.timerPaused;
     standalone.restoreSession();
     context.read<StandaloneProvider>().addListener(_onProviderChanged);
+    _syncMonitoring(standalone);
   }
 
   void _onProviderChanged() {
@@ -106,6 +144,75 @@ class _StandalonePageState extends State<StandalonePage> {
       _lastSource = standalone.cameraSource;
       _lastUrl = standalone.cameraUrl;
       _initVideo();
+    }
+    if (standalone.timerRunning != _lastTimerRunning ||
+        standalone.timerPaused != _lastTimerPaused) {
+      _lastTimerRunning = standalone.timerRunning;
+      _lastTimerPaused = standalone.timerPaused;
+      _syncMonitoring(standalone);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_setScreenAwake(
+        context.read<StandaloneProvider>().timerRunning &&
+            !context.read<StandaloneProvider>().timerPaused,
+      ));
+      if (_wasBackgrounded) {
+        _wasBackgrounded = false;
+        if (context.read<StandaloneProvider>().cameraSource ==
+            StandaloneCameraSource.ipCamera) {
+          _initVideo();
+        }
+      }
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _wasBackgrounded = true;
+      unawaited(_setScreenAwake(false));
+    }
+  }
+
+  void _syncMonitoring(StandaloneProvider standalone) {
+    final active = standalone.timerRunning && !standalone.timerPaused;
+    unawaited(_setScreenAwake(
+      active &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+    ));
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      if (active) {
+        unawaited(_startBackgroundMonitoring(standalone.remainingSeconds));
+      } else {
+        unawaited(_stopBackgroundMonitoring());
+      }
+    }
+  }
+
+  Future<void> _setScreenAwake(bool enabled) async {
+    try {
+      await WakelockPlus.toggle(enable: enabled);
+    } catch (error) {
+      debugPrint('Could not update screen wake lock: ${error.runtimeType}');
+    }
+  }
+
+  Future<void> _startBackgroundMonitoring(int remainingSeconds) async {
+    try {
+      await BackgroundServiceManager.startMonitoring(remainingSeconds);
+    } catch (error) {
+      debugPrint(
+          'Could not start Android monitoring service: ${error.runtimeType}');
+    }
+  }
+
+  Future<void> _stopBackgroundMonitoring() async {
+    try {
+      await BackgroundServiceManager.stopMonitoring();
+    } catch (error) {
+      debugPrint(
+          'Could not stop Android monitoring service: ${error.runtimeType}');
     }
   }
 
@@ -119,14 +226,20 @@ class _StandalonePageState extends State<StandalonePage> {
     if (mounted) setState(() => _detectorLoading = false);
   }
 
-  Future<void> _initVideo() async {
+  Future<void> _initVideo({bool resetRetry = true}) async {
+    if (!mounted) return;
     final standalone = context.read<StandaloneProvider>();
     final source = standalone.cameraSource;
     _cameraErrorMessage = null;
+    _cameraRetryMessage = null;
+    _cameraRetryTimer?.cancel();
+    _cameraRetryTimer = null;
+    if (resetRetry) _cameraRetryAttempt = 0;
     _lastSource = source;
     _lastUrl = standalone.cameraUrl;
 
     _stopVideo();
+    final generation = _cameraGeneration;
     standalone.setCameraActive(false);
 
     if (source == StandaloneCameraSource.ipCamera) {
@@ -143,9 +256,9 @@ class _StandalonePageState extends State<StandalonePage> {
         _cameraErrorMessage = null;
       });
       if (url.toLowerCase().startsWith('rtsp://')) {
-        _startRtspStream(url);
+        await _startRtspStream(url);
       } else {
-        _startIpStream(url);
+        unawaited(_startIpStream(url));
       }
       return;
     }
@@ -168,7 +281,8 @@ class _StandalonePageState extends State<StandalonePage> {
         back = cameras.first;
       }
       final controller = await _createController(back);
-      if (!mounted || controller == null) {
+      if (!mounted || generation != _cameraGeneration || controller == null) {
+        await controller?.dispose();
         if (mounted) {
           setState(() {
             _cameraError = true;
@@ -268,6 +382,12 @@ class _StandalonePageState extends State<StandalonePage> {
       ..connectionTimeout = const Duration(seconds: 8)
       ..idleTimeout = const Duration(seconds: 15);
     _ipHttpClient = client;
+    _ipStreamStartedAt = DateTime.now();
+    _ipLastFrameAt = null;
+    _cameraHealthTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _checkIpStreamHealth(generation),
+    );
     _lastIpFrame = null;
     final parser = MjpegFrameParser();
 
@@ -312,12 +432,13 @@ class _StandalonePageState extends State<StandalonePage> {
           try {
             for (final frame in parser.add(chunk)) {
               if (!mounted || generation != _cameraGeneration) return;
+              _ipLastFrameAt = DateTime.now();
               setState(() {
                 _lastIpFrame = frame;
                 _cameraError = false;
                 _cameraErrorMessage = null;
               });
-              context.read<StandaloneProvider>().setCameraActive(true);
+              _markCameraHealthy();
               final standalone = context.read<StandaloneProvider>();
               _runDetection(
                 () => _detector.detectFromJpeg(
@@ -352,6 +473,21 @@ class _StandalonePageState extends State<StandalonePage> {
     _rtspErrorSub = player.stream.error.listen((_) {
       _handleRtspFailure(generation);
     });
+    _rtspPositionSub = player.stream.position.listen((position) {
+      final previous = _rtspLastPosition;
+      if (previous != null && position > previous) {
+        _rtspPositionAdvanced = true;
+        _rtspLastProgressAt = DateTime.now();
+      }
+      _rtspLastPosition = position;
+    });
+    _rtspBufferingSub = player.stream.buffering.listen((buffering) {
+      if (buffering) {
+        _rtspBufferingStartedAt ??= DateTime.now();
+      } else {
+        _rtspBufferingStartedAt = null;
+      }
+    });
     _rtspVideoParamsSub = player.stream.videoParams.listen((params) {
       if (generation == _cameraGeneration &&
           (params.w ?? 0) > 0 &&
@@ -369,11 +505,21 @@ class _StandalonePageState extends State<StandalonePage> {
       rtspDetectionCaptureInterval,
       (_) => _captureRtspFrame(player, generation),
     );
+    _cameraHealthTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _checkRtspHealth(generation),
+    );
     if (mounted) setState(() {});
 
     try {
+      final platform = player.platform;
+      if (platform is NativePlayer) {
+        await platform.setProperty('demuxer-lavf-o', rtspLavfOptions);
+        await platform.setProperty('aid', 'no');
+      }
       await player.open(Media(url));
-    } on Exception {
+    } on Exception catch (error) {
+      debugPrint('RTSP startup failed: ${error.runtimeType}');
       _handleRtspFailure(generation);
     }
   }
@@ -393,7 +539,7 @@ class _StandalonePageState extends State<StandalonePage> {
       }
       final standalone = context.read<StandaloneProvider>();
       if (!standalone.cameraActive) {
-        standalone.setCameraActive(true);
+        _markCameraHealthy();
         _rtspConnectTimeout?.cancel();
       }
       _runDetection(
@@ -411,8 +557,51 @@ class _StandalonePageState extends State<StandalonePage> {
     }
   }
 
+  void _markCameraHealthy() {
+    _cameraRetryAttempt = 0;
+    _cameraRetryMessage = null;
+    _cameraRetryTimer?.cancel();
+    _cameraRetryTimer = null;
+    context.read<StandaloneProvider>().setCameraActive(true);
+  }
+
+  void _checkIpStreamHealth(int generation) {
+    if (generation != _cameraGeneration || !mounted) return;
+    final lastFrameAt = _ipLastFrameAt ?? _ipStreamStartedAt;
+    if (lastFrameAt != null &&
+        DateTime.now().difference(lastFrameAt) > const Duration(seconds: 20)) {
+      _handleIpStreamFailure(
+        generation,
+        const HttpException('Camera stream stopped sending frames'),
+      );
+    }
+  }
+
+  void _checkRtspHealth(int generation) {
+    if (generation != _cameraGeneration ||
+        !mounted ||
+        !context.read<StandaloneProvider>().cameraActive) {
+      return;
+    }
+    final now = DateTime.now();
+    final bufferingSince = _rtspBufferingStartedAt;
+    if (bufferingSince != null &&
+        now.difference(bufferingSince) > const Duration(seconds: 20)) {
+      _handleRtspFailure(generation);
+      return;
+    }
+    final lastProgressAt = _rtspLastProgressAt;
+    if (_rtspPositionAdvanced &&
+        lastProgressAt != null &&
+        now.difference(lastProgressAt) > const Duration(seconds: 25)) {
+      _handleRtspFailure(generation);
+    }
+  }
+
   void _handleRtspFailure(int generation) {
     if (generation != _cameraGeneration || !mounted) return;
+    _cameraHealthTimer?.cancel();
+    _cameraHealthTimer = null;
     _rtspFrameTimer?.cancel();
     _rtspFrameTimer = null;
     _rtspConnectTimeout?.cancel();
@@ -421,6 +610,10 @@ class _StandalonePageState extends State<StandalonePage> {
     _rtspErrorSub = null;
     _rtspVideoParamsSub?.cancel();
     _rtspVideoParamsSub = null;
+    _rtspPositionSub?.cancel();
+    _rtspPositionSub = null;
+    _rtspBufferingSub?.cancel();
+    _rtspBufferingSub = null;
     final player = _rtspPlayer;
     _rtspPlayer = null;
     _rtspController = null;
@@ -432,14 +625,20 @@ class _StandalonePageState extends State<StandalonePage> {
           ? 'Could not open the RTSP stream. Check the full stream path and the camera’s RTSP username and password. ONVIF and RTSP may use different credentials.'
           : 'No se pudo abrir el stream RTSP. Verifica la ruta completa y el usuario y contraseña RTSP de la cámara. ONVIF y RTSP pueden usar credenciales diferentes.';
     });
+    _scheduleCameraReconnect(generation);
   }
 
   void _handleIpStreamFailure(int generation, Object error) {
     if (generation != _cameraGeneration || !mounted) return;
     debugPrint('IP camera stream error: $error');
+    _cameraHealthTimer?.cancel();
+    _cameraHealthTimer = null;
+    unawaited(_ipStreamSub?.cancel());
     _ipHttpClient?.close(force: true);
     _ipHttpClient = null;
     _ipStreamSub = null;
+    _ipStreamStartedAt = null;
+    _ipLastFrameAt = null;
     context.read<StandaloneProvider>().setCameraActive(false);
     setState(() {
       _cameraError = true;
@@ -447,6 +646,50 @@ class _StandalonePageState extends State<StandalonePage> {
           ? 'Could not read the camera stream. Check its URL and that the phone and camera are on the same network.'
           : 'No se pudo leer el stream de la cámara. Verifica la URL y que el teléfono y la cámara estén en la misma red.';
     });
+    _scheduleCameraReconnect(generation);
+  }
+
+  void _scheduleCameraReconnect(int generation) {
+    if (generation != _cameraGeneration ||
+        !mounted ||
+        context.read<StandaloneProvider>().cameraSource !=
+            StandaloneCameraSource.ipCamera ||
+        _cameraRetryTimer != null) {
+      return;
+    }
+    final delay = cameraReconnectDelay(_cameraRetryAttempt);
+    _cameraRetryAttempt++;
+    setState(() {
+      _cameraRetryMessage = lang == 'en'
+          ? 'Retrying automatically in ${delay.inSeconds} seconds. Tap the refresh button to retry now.'
+          : 'Reintentando automáticamente en ${delay.inSeconds} s. Toca actualizar para reintentar ahora.';
+    });
+    _cameraRetryTimer = Timer(delay, () {
+      _cameraRetryTimer = null;
+      if (!mounted ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      unawaited(_initVideo(resetRetry: false));
+    });
+  }
+
+  Future<void> _reconnectCamera() async {
+    if (_cameraRestarting || !mounted) return;
+    setState(() {
+      _cameraRestarting = true;
+      _cameraError = false;
+      _cameraErrorMessage = null;
+      _cameraRetryMessage = null;
+    });
+    _cameraRetryTimer?.cancel();
+    _cameraRetryTimer = null;
+    _cameraRetryAttempt = 0;
+    try {
+      await _initVideo();
+    } finally {
+      if (mounted) setState(() => _cameraRestarting = false);
+    }
   }
 
   /// Stream de frames de la cámara del móvil → detección de personas.
@@ -517,6 +760,8 @@ class _StandalonePageState extends State<StandalonePage> {
 
   void _stopVideo() {
     _cameraGeneration++;
+    _cameraHealthTimer?.cancel();
+    _cameraHealthTimer = null;
     _rtspFrameTimer?.cancel();
     _rtspFrameTimer = null;
     _rtspConnectTimeout?.cancel();
@@ -525,16 +770,26 @@ class _StandalonePageState extends State<StandalonePage> {
     _rtspErrorSub = null;
     _rtspVideoParamsSub?.cancel();
     _rtspVideoParamsSub = null;
+    _rtspPositionSub?.cancel();
+    _rtspPositionSub = null;
+    _rtspBufferingSub?.cancel();
+    _rtspBufferingSub = null;
     final rtspPlayer = _rtspPlayer;
     _rtspPlayer = null;
     _rtspController = null;
     if (rtspPlayer != null) unawaited(rtspPlayer.dispose());
     _rtspScreenshotInFlight = false;
     _rtspVideoReady = false;
+    _rtspPositionAdvanced = false;
+    _rtspLastPosition = null;
+    _rtspLastProgressAt = null;
+    _rtspBufferingStartedAt = null;
     _ipStreamSub?.cancel();
     _ipStreamSub = null;
     _ipHttpClient?.close(force: true);
     _ipHttpClient = null;
+    _ipStreamStartedAt = null;
+    _ipLastFrameAt = null;
     _camera?.dispose();
     _camera = null;
     _cameraDescription = null;
@@ -567,10 +822,14 @@ class _StandalonePageState extends State<StandalonePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _alertTimer?.cancel();
+    _cameraRetryTimer?.cancel();
     _stopVideo();
     _detector.dispose();
     context.read<StandaloneProvider>().removeListener(_onProviderChanged);
+    context.read<StandaloneProvider>().setCameraActive(false);
+    unawaited(_setScreenAwake(false));
     super.dispose();
   }
 
@@ -639,6 +898,18 @@ class _StandalonePageState extends State<StandalonePage> {
             ? "Standalone mode"
             : "Modo independiente"),
         actions: [
+          if (standalone.cameraSource == StandaloneCameraSource.ipCamera)
+            IconButton(
+              tooltip: lang == 'en' ? 'Reconnect camera' : 'Reconectar cámara',
+              onPressed: _cameraRestarting ? null : _reconnectCamera,
+              icon: _cameraRestarting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+            ),
           IconButton(
             tooltip: AppLocal.language == "en"
                 ? "Change device or camera"
@@ -691,13 +962,35 @@ class _StandalonePageState extends State<StandalonePage> {
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(20),
-                          child: Text(
-                            _cameraErrorMessage ??
-                                (lang == "en"
-                                    ? "Could not access the camera.\nCheck the connection and permissions."
-                                    : "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos."),
-                            style: const TextStyle(color: Colors.white),
-                            textAlign: TextAlign.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                [
+                                  _cameraErrorMessage ??
+                                      (lang == "en"
+                                          ? "Could not access the camera.\nCheck the connection and permissions."
+                                          : "No se pudo acceder a la cámara.\nRevisa la conexión y los permisos."),
+                                  if (_cameraRetryMessage != null)
+                                    _cameraRetryMessage!,
+                                ].join('\n\n'),
+                                style: const TextStyle(color: Colors.white),
+                                textAlign: TextAlign.center,
+                              ),
+                              if (standalone.cameraSource ==
+                                  StandaloneCameraSource.ipCamera) ...[
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: _cameraRestarting
+                                      ? null
+                                      : _reconnectCamera,
+                                  icon: const Icon(Icons.refresh),
+                                  label: Text(lang == 'en'
+                                      ? 'Reconnect camera now'
+                                      : 'Reconectar cámara ahora'),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       )
@@ -934,6 +1227,22 @@ class _StandalonePageState extends State<StandalonePage> {
               ],
             ),
           ),
+
+          if (standalone.timerRunning)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                defaultTargetPlatform == TargetPlatform.iOS
+                    ? (lang == 'en'
+                        ? 'Keep CocinaP open to keep the live camera running on iPhone. iOS suspends camera networking in the background; the stream reconnects when you return.'
+                        : 'Mantén CocinaP abierta para conservar el video en iPhone. iOS suspende la conexión de cámara en segundo plano; el stream se reconecta al volver.')
+                    : (lang == 'en'
+                        ? 'Monitoring keeps the screen awake and uses an Android foreground notification. Reopen CocinaP if Android pauses the stream; it will reconnect automatically.'
+                        : 'El monitoreo mantiene la pantalla encendida y usa una notificación persistente en Android. Si Android pausa el video, vuelve a CocinaP para reconectarlo automáticamente.'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11, color: Colors.white60),
+              ),
+            ),
 
           // Acceso a cambiar de dispositivo/cámara
           Padding(

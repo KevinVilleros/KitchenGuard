@@ -7,6 +7,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ---
 
+## [1.0.9] - Unreleased
+
+### Fixed
+
+- Retry stalled or disconnected IP camera streams automatically, and add a
+  manual camera reconnect control.
+- Reconnect IP camera streams when the app returns to the foreground and use
+  RTSP over TCP with audio disabled for more reliable live playback.
+- Explain the iOS ONVIF multicast entitlement limitation and provide manual
+  RTSP URL entry as a fallback.
+
+### Changed
+
+- Keep the screen awake during active monitoring and show platform-specific
+  guidance about live camera behavior in the background.
+- Use only Android's `dataSync` foreground-service type for remote IP camera
+  monitoring; an RTSP stream does not use the phone's physical camera.
+- Advance the mobile package version to `1.0.9+9`.
+
+---
+
 ## [1.0.8] - Unreleased
 
 ### Fixed
