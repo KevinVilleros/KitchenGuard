@@ -87,8 +87,10 @@ class PersonDetector {
     try {
       final image = img.decodeJpg(jpeg);
       if (image == null) return DetectionResult.empty;
-      final nv21 = _imageToNv21(image);
-      final input = _inputFromNv21(nv21, image.width, image.height, 0);
+      final input = inputFromRgbImage(
+        image,
+        platform: defaultTargetPlatform,
+      );
       return await _process(input, confidence);
     } catch (e) {
       debugPrint('PD jpeg error: $e');
@@ -103,8 +105,10 @@ class PersonDetector {
   }) async {
     if (!_loaded || _detector == null) return DetectionResult.empty;
     try {
-      final nv21 = _imageToNv21(image);
-      final input = _inputFromNv21(nv21, image.width, image.height, 0);
+      final input = inputFromRgbImage(
+        image,
+        platform: defaultTargetPlatform,
+      );
       return await _process(input, confidence);
     } catch (e) {
       debugPrint('PD person error: $e');
@@ -217,8 +221,7 @@ class PersonDetector {
       final height = image.height;
       final group = image.format.group;
 
-      if (group == ImageFormatGroup.yuv420 ||
-          group == ImageFormatGroup.nv21) {
+      if (group == ImageFormatGroup.yuv420 || group == ImageFormatGroup.nv21) {
         if (image.planes.isEmpty) return null;
         final yPlane = image.planes[0];
         final nv21 = Uint8List(width * height + width * height ~/ 2);
@@ -263,7 +266,8 @@ class PersonDetector {
           for (var x = 0; x < width ~/ 2; x++) {
             final uIndex = y * uRowStride + x * uPixelStride;
             final vIndex = y * vRowStride + x * vPixelStride;
-            if (vIndex >= vPlane.bytes.length || uIndex >= uPlane.bytes.length) {
+            if (vIndex >= vPlane.bytes.length ||
+                uIndex >= uPlane.bytes.length) {
               return null;
             }
             nv21[pos++] = vPlane.bytes[vIndex]; // V
@@ -318,17 +322,46 @@ class PersonDetector {
         final r = p.r.toInt();
         final g = p.g.toInt();
         final b = p.b.toInt();
-        final u = (-0.169 * r - 0.331 * g + 0.5 * b + 128)
-            .round()
-            .clamp(0, 255);
-        final v = (0.5 * r - 0.419 * g - 0.081 * b + 128)
-            .round()
-            .clamp(0, 255);
+        final u =
+            (-0.169 * r - 0.331 * g + 0.5 * b + 128).round().clamp(0, 255);
+        final v = (0.5 * r - 0.419 * g - 0.081 * b + 128).round().clamp(0, 255);
         nv21[uvPos++] = v; // V primero (NV21)
         nv21[uvPos++] = u;
       }
     }
     return nv21;
+  }
+
+  @visibleForTesting
+  InputImage inputFromRgbImage(
+    img.Image image, {
+    required TargetPlatform platform,
+  }) {
+    if (platform == TargetPlatform.iOS) {
+      final bytes = Uint8List(image.width * image.height * 4);
+      var offset = 0;
+      for (var y = 0; y < image.height; y++) {
+        for (var x = 0; x < image.width; x++) {
+          final pixel = image.getPixel(x, y);
+          bytes[offset++] = pixel.b.toInt();
+          bytes[offset++] = pixel.g.toInt();
+          bytes[offset++] = pixel.r.toInt();
+          bytes[offset++] = pixel.a.toInt();
+        }
+      }
+      return InputImage.fromBytes(
+        bytes: bytes,
+        metadata: InputImageMetadata(
+          size: ui.Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: InputImageRotation.rotation0deg,
+          format: InputImageFormat.bgra8888,
+          bytesPerRow: image.width * 4,
+        ),
+      );
+    }
+
+    final nv21 = _imageToNv21(image);
+    return _inputFromNv21(nv21, image.width, image.height, 0);
   }
 
   InputImage? _inputFromIosBgra(CameraImage image) {

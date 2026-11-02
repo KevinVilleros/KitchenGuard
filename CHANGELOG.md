@@ -7,6 +7,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ---
 
+## [1.0.10] - Unreleased
+
+### Fixed
+
+- Send IP camera JPEG frames to ML Kit in BGRA8888 format on iOS; NV21 is only
+  supported for byte-array inputs on Android.
+- Add regression tests for platform-specific camera frame formats.
+- Update detector documentation to describe the actual on-device ML Kit pose
+  detection pipeline and its low-light limitations.
+
+### Changed
+
+- Advance the mobile package version to `1.0.10+10`.
+
+---
+
 ## [1.0.9] - Unreleased
 
 ### Fixed
