@@ -260,7 +260,7 @@ jobs:
           fi
 
       - name: Create release and attach installers
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         with:
