@@ -72,8 +72,9 @@ Al añadir UI, prueba en pantallas pequeñas (~411x921 lógicos).
 - V380 Pro es el nombre de una app y no garantiza que todos los modelos
   asociados expongan ONVIF/RTSP. El modelo **AIT36106** no se ha validado con
   CocinaP.
-- En iPhone, la búsqueda multicast puede estar limitada por iOS; usa la URL
-  manual si el modelo proporciona un stream compatible.
+- En iPhone, esta versión no puede buscar ONVIF por multicast porque requiere
+  una autorización de Apple que no está incluida. Vuelve al campo manual y usa
+  una URL de stream compatible.
 
 ### La detección de personas no alerta
 

@@ -72,8 +72,9 @@ When adding UI, test on small screens (~411x921 logical px).
   **HTTP/MJPEG** stream URL; the IP address alone does not identify a stream.
 - V380 Pro is an app name and does not guarantee all associated models expose
   ONVIF/RTSP. Model **AIT36106** has not been validated with CocinaP.
-- On iPhone, iOS may restrict multicast discovery; use a manual URL if the
-  model provides a compatible stream.
+- On iPhone, this build cannot use ONVIF multicast discovery because it requires
+  an Apple entitlement that is not included. Return to manual setup and use a
+  compatible stream URL.
 
 ### Person detection doesn't alert
 

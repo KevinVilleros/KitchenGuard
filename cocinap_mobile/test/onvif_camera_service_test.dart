@@ -4,8 +4,38 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:cocinap_mobile/services/onvif_camera_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xml/xml.dart';
 
 void main() {
+  test('ONVIF discovery sends a valid probe with retry intervals', () {
+    const discoveryId = 'urn:uuid:camera-probe-test';
+    final probe = XmlDocument.parse(buildOnvifProbe(discoveryId));
+
+    expect(
+      probe.descendants
+          .whereType<XmlElement>()
+          .firstWhere((element) => element.localName == 'MessageID')
+          .innerText,
+      discoveryId,
+    );
+    expect(
+      probe.descendants
+          .whereType<XmlElement>()
+          .firstWhere((element) => element.localName == 'Types')
+          .innerText,
+      'dn:NetworkVideoTransmitter',
+    );
+    expect(
+      onvifProbeSchedule(),
+      const [
+        Duration.zero,
+        Duration(seconds: 2),
+        Duration(seconds: 4),
+      ],
+    );
+    expect(onvifDiscoveryTimeout, const Duration(seconds: 6));
+  });
+
   group('ONVIF HTTP authentication', () {
     for (final scheme in ['Basic', 'Digest']) {
       test('retries SOAP requests with HTTP $scheme authentication', () async {

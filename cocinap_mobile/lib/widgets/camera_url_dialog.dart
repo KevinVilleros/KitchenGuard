@@ -191,21 +191,21 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
         _cameras = cameras;
         _searching = false;
       });
-    } on SocketException {
-      _showSearchError();
-    } on TimeoutException {
-      _showSearchError();
-    } on PlatformException {
-      _showSearchError();
-    } on FormatException {
-      _showSearchError();
-    } on XmlException {
-      _showSearchError();
-    } on UnsupportedError {
-      _showSearchError();
+    } on SocketException catch (error) {
+      _showSearchError(error);
+    } on TimeoutException catch (error) {
+      _showSearchError(error);
+    } on PlatformException catch (error) {
+      _showSearchError(error);
+    } on FormatException catch (error) {
+      _showSearchError(error);
+    } on XmlException catch (error) {
+      _showSearchError(error);
+    } on UnsupportedError catch (error) {
+      _showSearchError(error);
     } catch (error) {
       debugPrint('ONVIF discovery failed: ${error.runtimeType}');
-      _showSearchError();
+      _showSearchError(error);
     }
   }
 
@@ -247,12 +247,16 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
     }
   }
 
-  void _showSearchError() {
+  void _showSearchError([Object? error]) {
     if (!mounted) return;
     setState(() {
-      _error = widget.english
-          ? 'Could not search this network. Check local-network permission, or enter the stream URL manually.'
-          : 'No se pudo buscar en esta red. Revisa el permiso de red local o escribe la URL del stream manualmente.';
+      _error = error is UnsupportedError && Platform.isIOS
+          ? (widget.english
+              ? 'iOS requires Apple approval for ONVIF multicast discovery, which is not enabled in this build. Return to manual setup and enter the camera stream URL.'
+              : 'iOS requiere autorización de Apple para buscar ONVIF por multicast y esta versión no la tiene. Vuelve a la configuración manual e introduce la URL del stream.')
+          : widget.english
+              ? 'Could not search this network. Check local-network permission, or enter the stream URL manually.'
+              : 'No se pudo buscar en esta red. Revisa el permiso de red local o escribe la URL del stream manualmente.';
       _searching = false;
     });
   }
@@ -286,6 +290,10 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
   }
 
   Future<void> _enterRtspUrl() async {
+    if (_failedCamera == null) {
+      Navigator.pop(context);
+      return;
+    }
     await _showManualRtspDialog();
   }
 
@@ -342,21 +350,27 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
                         onPressed: _enterRtspUrl,
                         icon: const Icon(Icons.link),
                         label: Text(
-                          english
-                              ? 'Enter RTSP stream URL'
-                              : 'Escribir URL del stream RTSP',
+                          _failedCamera == null
+                              ? (english
+                                  ? 'Back to manual camera URL'
+                                  : 'Volver a escribir la URL')
+                              : (english
+                                  ? 'Enter RTSP stream URL'
+                                  : 'Escribir URL del stream RTSP'),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: _tryStream2Fallback,
-                        icon: const Icon(Icons.flash_on),
-                        label: Text(
-                          english
-                              ? 'Try RTSP path /stream2'
-                              : 'Probar ruta RTSP /stream2',
+                      if (_failedCamera != null) ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _tryStream2Fallback,
+                          icon: const Icon(Icons.flash_on),
+                          label: Text(
+                            english
+                                ? 'Try RTSP path /stream2'
+                                : 'Probar ruta RTSP /stream2',
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   )
                 : _cameras.isEmpty

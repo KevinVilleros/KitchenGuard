@@ -8,6 +8,35 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:xml/xml.dart';
 
+@visibleForTesting
+const onvifDiscoveryTimeout = Duration(seconds: 6);
+
+@visibleForTesting
+const onvifProbeRepeatInterval = Duration(seconds: 2);
+
+@visibleForTesting
+const onvifProbeMaxAttempts = 3;
+
+@visibleForTesting
+List<Duration> onvifProbeSchedule() => List.generate(
+      onvifProbeMaxAttempts,
+      (attempt) => Duration(
+        milliseconds: onvifProbeRepeatInterval.inMilliseconds * attempt,
+      ),
+    );
+
+@visibleForTesting
+String buildOnvifProbe(String discoveryId) => '''
+<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
+  <e:Header>
+    <w:MessageID>$discoveryId</w:MessageID>
+    <w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
+    <w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
+  </e:Header>
+  <e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body>
+</e:Envelope>
+''';
+
 class OnvifCamera {
   final String name;
   final String address;
@@ -29,14 +58,28 @@ class OnvifCameraService {
   static const _maxSoapResponseBytes = 1024 * 1024;
 
   Future<List<OnvifCamera>> discover({
-    Duration timeout = const Duration(seconds: 4),
+    Duration timeout = onvifDiscoveryTimeout,
   }) async {
-    if (Platform.isAndroid) {
-      await _androidMulticastChannel.invokeMethod<void>('acquireMulticastLock');
+    if (Platform.isIOS) {
+      throw UnsupportedError(
+        'ONVIF multicast discovery requires an Apple-approved entitlement.',
+      );
+    }
+    if (timeout <= Duration.zero) {
+      throw ArgumentError.value(timeout, 'timeout', 'Must be positive.');
     }
 
+    var multicastLockAcquired = false;
+    StreamSubscription<RawSocketEvent>? subscription;
+    final probeTimers = <Timer>[];
+    Object? probeFailure;
     RawDatagramSocket? socket;
     try {
+      if (Platform.isAndroid) {
+        await _androidMulticastChannel
+            .invokeMethod<void>('acquireMulticastLock');
+        multicastLockAcquired = true;
+      }
       socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0)
           .timeout(const Duration(seconds: 5));
       final cameras = <String, OnvifCamera>{};
@@ -46,18 +89,8 @@ class OnvifCameraService {
           .join();
       final discoveryId =
           'urn:uuid:${id.substring(0, 8)}-${id.substring(8, 12)}-${id.substring(12, 16)}-${id.substring(16, 20)}-${id.substring(20)}';
-      final probe = '''
-<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
-  <e:Header>
-    <w:MessageID>$discoveryId</w:MessageID>
-    <w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
-    <w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
-  </e:Header>
-  <e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body>
-</e:Envelope>
-''';
-
-      final subscription = socket.listen((event) {
+      final probe = buildOnvifProbe(discoveryId);
+      subscription = socket.listen((event) {
         if (event != RawSocketEvent.read) return;
         final datagram = socket?.receive();
         if (datagram == null) return;
@@ -79,21 +112,39 @@ class OnvifCameraService {
         }
       });
 
-      socket.send(
-        utf8.encode(probe),
-        InternetAddress(_multicastAddress),
-        _multicastPort,
-      );
+      var attempts = 0;
+      void sendProbe() {
+        if (done.isCompleted || attempts >= onvifProbeMaxAttempts) return;
+        try {
+          socket!.send(
+            utf8.encode(probe),
+            InternetAddress(_multicastAddress),
+            _multicastPort,
+          );
+          attempts++;
+        } catch (error) {
+          probeFailure = error;
+          if (!done.isCompleted) done.complete();
+        }
+      }
+
+      for (final delay in onvifProbeSchedule()) {
+        probeTimers.add(Timer(delay, sendProbe));
+      }
       await Future.any<void>([
         done.future,
         Future<void>.delayed(timeout),
       ]);
-      await subscription.cancel();
+      if (probeFailure != null && cameras.isEmpty) throw probeFailure!;
       return cameras.values.toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } finally {
+      for (final timer in probeTimers) {
+        timer.cancel();
+      }
+      await subscription?.cancel();
       socket?.close();
-      if (Platform.isAndroid) {
+      if (multicastLockAcquired) {
         await _androidMulticastChannel
             .invokeMethod<void>('releaseMulticastLock');
       }

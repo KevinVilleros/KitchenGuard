@@ -56,8 +56,9 @@ En **Monitoreo**, toca el icono **Dispositivos** (barra superior) o el botón
   teléfono y la cámara deben estar en la misma red y ONVIF habilitado. Selecciona
   la cámara e introduce sus credenciales. Si no aparece, puedes introducir una
   URL completa HTTP/MJPEG o RTSP del manual o de la app de la cámara; una IP
-  sola no basta. En iOS, el sistema puede limitar la búsqueda multicast
-  automática. Las credenciales se guardan de forma segura en el dispositivo.
+  sola no basta. En iOS, la búsqueda automática ONVIF por multicast requiere
+  una autorización de Apple que esta versión no incluye. Las credenciales se
+  guardan de forma segura en el dispositivo.
   ONVIF y RTSP pueden requerir credenciales distintas; usa las de RTSP cuando
   la app las solicite. Si falla ONVIF, puedes probar la ruta RTSP `/stream2`;
   confirma que sea compatible con tu cámara y ajusta la URL si hace falta.

@@ -7,6 +7,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ---
 
+## [1.0.11] - Unreleased
+
+### Fixed
+
+- Send up to three ONVIF multicast probes during a longer search window to
+  improve detection on slower local networks.
+- Stop showing an RTSP fallback action that cannot work until a camera has been
+  discovered; return to the manual stream URL field instead.
+- Report the iOS multicast entitlement restriction directly instead of
+  starting a discovery attempt that cannot receive ONVIF responses.
+
+### Changed
+
+- Advance the mobile package version to `1.0.11+11`.
+
+---
+
 ## [1.0.10] - Unreleased
 
 ### Fixed
