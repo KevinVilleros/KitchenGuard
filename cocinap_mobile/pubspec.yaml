@@ -16,7 +16,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   camera: ^0.11.0
   camera_windows: ^0.3.0+1
-  google_mlkit_pose_detection: ^0.16.1
+  google_mlkit_pose_detection: ^1.0.3
   flutter_onnxruntime: ^1.9.0
   path_provider: ^2.1.0
   image: ^4.2.0
