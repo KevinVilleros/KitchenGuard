@@ -26,3 +26,12 @@ Este software y su código fuente asociado (en adelante, "el Software") es propi
 ---
 
 *Para consultas sobre licencias comerciales, distribuciones OEM o uso empresarial, contactar a los desarrolladores del proyecto.*
+
+## Componentes de terceros
+
+Los componentes de terceros que se incluyan en algunos paquetes, incluido
+FFmpeg en el paquete de prueba para Windows, no forman parte del Software
+propietario de CocinaP y no se rigen por esta licencia comercial. Esos
+componentes se distribuyen bajo sus propias licencias y avisos, incluidos en el
+paquete. Consulta [docs/third_party/FFMPEG.md](docs/third_party/FFMPEG.md) y el
+`LICENSE.txt` que acompaña a FFmpeg.

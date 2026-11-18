@@ -24,19 +24,20 @@ Esta Política de Privacidad explica qué datos tratamos, cómo los usamos y qu�
 
 ## 2. Principio fundamental: procesamiento local en tu dispositivo
 
-El diseño de CocinaP prioriza tu privacidad. En modo local, las imágenes de
-las cámaras se procesan directamente en el teléfono o PC Windows con CocinaP.
+En modo local, el video se procesa directamente en el dispositivo. Si activas
+**Acceso desde cualquier lugar** en Windows, la PC transmite el video en vivo
+por internet a través de CocinaP Cloud y LiveKit para que el móvil vinculado
+pueda verlo. También se comparte el estado del monitoreo (por ejemplo, cámara
+activa, detección de persona y temporizador) para sincronizar la vista móvil.
+El gateway de CocinaP Cloud usa Cloudflare Workers para la vinculación y los
+tokens de acceso. CocinaP no tiene una función para grabar ni guardar ese
+video, pero la transmisión sí pasa por infraestructura de terceros;
+su tratamiento y retención también dependen de las condiciones de esos
+proveedores. Puedes seguir usando los modos locales sin activar la nube.
+La detección de personas se ejecuta localmente en el teléfono o PC.
 
-**CocinaP no ofrece almacenamiento de video en la nube ni recibe tus imágenes
-en servidores operados por CocinaP.** Si configuras video remoto de Windows,
-el stream viaja desde tu PC al teléfono por tu red privada Tailscale
-mediante HTTPS. Tailscale puede retransmitir tráfico de red cifrado; consulta
-la información de privacidad de Tailscale para conocer sus servicios y los
-metadatos de red que trata. La app móvil solicita el video de una cámara IP
-directamente; la detección de personas se ejecuta localmente en el teléfono o
-el PC Windows.
-
-Puedes consultar esta implementación técnica en el manual y la arquitectura del proyecto (ver `docs/ARCHITECTURE.md`).
+Puedes consultar esta implementación técnica en el manual y la
+[arquitectura](../es/ARCHITECTURE.md).
 
 ---
 
@@ -46,9 +47,9 @@ La aplicación puede solicitar los siguientes permisos y tratar los siguientes d
 
 ### 3.1 Permisos de cámara
 - **Finalidad:** capturar el video en vivo de la cocina para analizar la presencia de focos de riesgo y de personas.
-- **Nota:** CocinaP no graba ni sube el video de la cámara a sus propios
-  servidores. Si habilitas video remoto de escritorio, el video se transmite
-  entre tu PC y el teléfono mediante Tailscale (ver apartado 5).
+- **Nota:** CocinaP no ofrece grabación de video. Si habilitas el acceso cloud,
+  el video en vivo se transmite desde la PC por LiveKit hasta el móvil
+  vinculado (ver apartado 5).
 
 ### 3.2 Permisos de almacenamiento
 - **Finalidad:** guardar la configuración de la aplicación (preferencias, URLs de cámaras, ajustes de detección) de manera local en tu dispositivo.
@@ -87,21 +88,34 @@ avisarte si la cocina queda desatendida.
 
 **No vendemos ni alquilamos** tus datos personales.
 
-La aplicación no transmite tu configuración ni las imágenes analizadas a
-servidores de CocinaP. Si configuras video remoto de escritorio, envía la
-dirección del escritorio y la clave API al PC y recibe su stream de video por
-la red Tailscale. La app móvil guarda la dirección Windows y la clave API en el
-almacenamiento seguro del teléfono; CocinaP Windows guarda su clave host en el
-almacenamiento seguro de Windows.
+En el modo local, la aplicación no transmite el video analizado. Si activas el
+modo cloud, CocinaP Cloud (gateway en Cloudflare Workers) recibe identificadores
+del dispositivo y credenciales de vinculación para emitir tokens de acceso; el
+video y el estado del monitoreo se envían por LiveKit entre la PC y el móvil
+vinculado. El móvil también puede enviar comandos para iniciar, pausar o
+detener el temporizador. El QR contiene una clave privada de visualización:
+compártelo solo con personas de confianza. La PC y el móvil guardan sus
+credenciales en el almacenamiento seguro del sistema operativo. Las
+condiciones de tratamiento y retención de Cloudflare y LiveKit también aplican
+a sus servicios.
+
+La versión de prueba no gestiona suscripciones ni procesa pagos.
 
 ### Sobre las notificaciones push (información adicional)
-La versión actual utiliza notificaciones locales y no integra notificaciones push remotas. El comportamiento de las notificaciones depende de la plataforma y de los permisos concedidos.
+La versión actual utiliza notificaciones locales y no integra notificaciones
+push remotas fiables para el monitoreo en segundo plano. El comportamiento de
+las notificaciones depende de la plataforma, los permisos concedidos y de que
+la aplicación permanezca activa.
 
 ---
 
 ## 6. Retención de datos
 
 - Los datos de configuración se conservan en tu dispositivo hasta que los borres o desinstales la aplicación.
+- Los datos de conexión cloud necesarios para la vinculación pueden permanecer
+  en los servicios de Cloudflare y LiveKit conforme a sus políticas de
+  retención; la versión de prueba no ofrece una herramienta para revocar
+  dispositivos vinculados ni borrar esos registros desde la app.
 - El historial visible de alertas de la sesión es temporal y puede perderse al cerrar la app; la versión actual no ofrece un historial persistente ni una función para exportarlo.
 - Para el borrado total, puedes desinstalar la aplicación. Si has sincronizado con un servidor propio, elimina los datos de ese servidor y revoca las conexiones/cámaras configuradas.
 

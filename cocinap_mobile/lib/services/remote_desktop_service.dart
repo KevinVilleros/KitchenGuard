@@ -23,7 +23,6 @@ class RemoteDesktopService {
     }
     return uri.replace(path: '', query: null, fragment: null);
   }
-
   static bool isValidApiKey(String value) => _apiKeyPattern.hasMatch(value);
 
   static Uri buildStreamUri(String baseUrl) =>

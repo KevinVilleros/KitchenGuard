@@ -29,17 +29,16 @@ class RemoteCloudHostService with WidgetsBindingObserver {
     if (!Platform.isWindows) {
       throw UnsupportedError('CocinaP Cloud solo publica desde Windows.');
     }
-    WidgetsBinding.instance.addObserver(this);
-
-    await RemoteCameraServer.instance.start(
-      apiKey: localApiKey,
-      getFrame: () => provider.latestCameraJpeg,
-      getFrameTime: () => provider.latestCameraFrameAt,
-    );
 
     final ffmpegPath = await _resolveFfmpegPath();
     final ingress = await _service.getIngress(credentials);
+    final cameraServerWasRunning = RemoteCameraServer.instance.isRunning;
     try {
+      await RemoteCameraServer.instance.start(
+        apiKey: localApiKey,
+        getFrame: () => provider.latestCameraJpeg,
+        getFrameTime: () => provider.latestCameraFrameAt,
+      );
       await _streamPublisher.start(
         ingress: ingress,
         ffmpegPath: ffmpegPath,
@@ -49,8 +48,13 @@ class RemoteCloudHostService with WidgetsBindingObserver {
         credentials: credentials,
         provider: provider,
       );
+      WidgetsBinding.instance.addObserver(this);
     } catch (_) {
+      await _monitoringPublisher.stop();
       await _streamPublisher.stop();
+      if (!cameraServerWasRunning) {
+        await RemoteCameraServer.instance.stop();
+      }
       rethrow;
     }
   }
@@ -69,8 +73,11 @@ class RemoteCloudHostService with WidgetsBindingObserver {
   }
 
   Future<String> _resolveFfmpegPath() async {
-    final besideApp =
-        File('${File(Platform.resolvedExecutable).parent.path}\\ffmpeg.exe');
+    final appDirectory = File(Platform.resolvedExecutable).parent.path;
+    final bundled = File('$appDirectory\\ffmpeg\\ffmpeg.exe');
+    if (await bundled.exists()) return bundled.path;
+
+    final besideApp = File('$appDirectory\\ffmpeg.exe');
     if (await besideApp.exists()) return besideApp.path;
 
     final result = await Process.run(

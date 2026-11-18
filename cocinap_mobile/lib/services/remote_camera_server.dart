@@ -12,6 +12,7 @@ class RemoteCameraServer {
 
   HttpServer? _server;
   StreamSubscription<HttpRequest>? _requests;
+  final Map<HttpResponse, Future<void>> _responseClosures = {};
   String? _apiKey;
   Uint8List? Function()? _getFrame;
   DateTime? Function()? _getFrameTime;
@@ -188,10 +189,18 @@ class RemoteCameraServer {
     } finally {
       _streamResponses.remove(response);
       await _closeResponse(response);
+      _responseClosures.remove(response);
     }
   }
 
-  Future<void> _closeResponse(HttpResponse response) async {
+  Future<void> _closeResponse(HttpResponse response) {
+    return _responseClosures.putIfAbsent(
+      response,
+      () => _closeResponseOnce(response),
+    );
+  }
+
+  Future<void> _closeResponseOnce(HttpResponse response) async {
     try {
       await response.close();
     } on IOException catch (error) {

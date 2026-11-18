@@ -280,6 +280,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 size: 240,
                 backgroundColor: Colors.white,
               ),
+              const SizedBox(height: 12),
+              Text(
+                AppLocal.language == 'en'
+                    ? 'On the phone, open Settings > Remote PC over cloud and scan this code. Keep it private.'
+                    : 'En el móvil, abre Ajustes > PC remota por la nube y escanea este código. No lo compartas.',
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -627,55 +634,71 @@ class _SettingsPageState extends State<SettingsPage> {
           if (Platform.isWindows) ...[
             const Divider(),
             SwitchListTile(
-              secondary: const Icon(Icons.vpn_lock),
-              title: Text(l('Permitir acceso remoto', 'Allow remote access')),
-              subtitle: Text(
-                l(
-                  'Sirve la cámara de este PC al móvil por Tailscale.',
-                  'Serves this PC camera to your phone through Tailscale.',
-                ),
-              ),
-              value: _remoteHostEnabled,
-              onChanged: _remoteHostLoading ? null : _setRemoteHostEnabled,
-            ),
-            if (_remoteHostEnabled) ...[
-              ListTile(
-                leading: const Icon(Icons.key),
-                title: Text(l('Clave API', 'API key')),
-                subtitle: SelectableText(_remoteHostApiKey),
-                trailing: IconButton(
-                  tooltip: l('Copiar clave', 'Copy key'),
-                  icon: const Icon(Icons.copy),
-                  onPressed: _copyRemoteHostApiKey,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  l(
-                    'En PowerShell ejecuta `tailscale serve --bg 8080`; luego agrega en el móvil la dirección HTTPS .ts.net y esta clave. Mantén CocinaP abierto.',
-                    'Run `tailscale serve --bg 8080` in PowerShell, then add the HTTPS .ts.net address and this key on your phone. Keep CocinaP open.',
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ],
-            SwitchListTile(
               secondary: const Icon(Icons.cloud_outlined),
               title: Text(
                 l(
-                  'Acceso remoto por nube (prueba)',
-                  'Cloud remote access (test)',
+                  'Acceso desde cualquier lugar',
+                  'Access from anywhere',
                 ),
               ),
               subtitle: Text(
                 l(
-                  'Prueba técnica sin cobro ni suscripción. Requiere internet, PC encendida y ffmpeg.exe junto a CocinaP.',
-                  'Technical test with no billing or subscription. Requires internet, the PC to stay on, and ffmpeg.exe beside CocinaP.',
+                  'Actívalo en la PC y escanea el QR desde CocinaP en el móvil. Requiere internet y que la PC permanezca encendida.',
+                  'Turn it on on the PC, then scan its QR from CocinaP on your phone. The PC must stay on and connected to the internet.',
                 ),
               ),
               value: _cloudHostEnabled,
               onChanged: _cloudHostLoading ? null : _setCloudHostEnabled,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                l(
+                  'Versión de prueba: el acceso se vincula por QR, pero CocinaP todavía no gestiona ni cobra suscripciones.',
+                  'Test version: QR pairing works, but CocinaP does not yet manage or bill subscriptions.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            ExpansionTile(
+              leading: const Icon(Icons.vpn_lock),
+              title: Text(
+                l('Acceso avanzado por VPN', 'Advanced VPN access'),
+              ),
+              subtitle: Text(
+                l(
+                  'Opcional; no se necesita para vincular por nube.',
+                  'Optional; not needed for cloud pairing.',
+                ),
+              ),
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.vpn_lock),
+                  title: Text(
+                    l('Permitir acceso por Tailscale',
+                        'Allow Tailscale access'),
+                  ),
+                  subtitle: Text(
+                    l(
+                      'Solo para configuraciones avanzadas; el acceso por nube no lo requiere.',
+                      'For advanced setups only; cloud access does not require it.',
+                    ),
+                  ),
+                  value: _remoteHostEnabled,
+                  onChanged: _remoteHostLoading ? null : _setRemoteHostEnabled,
+                ),
+                if (_remoteHostEnabled)
+                  ListTile(
+                    leading: const Icon(Icons.key),
+                    title: Text(l('Clave API', 'API key')),
+                    subtitle: SelectableText(_remoteHostApiKey),
+                    trailing: IconButton(
+                      tooltip: l('Copiar clave', 'Copy key'),
+                      icon: const Icon(Icons.copy),
+                      onPressed: _copyRemoteHostApiKey,
+                    ),
+                  ),
+              ],
             ),
             if (_cloudHostError != null)
               Padding(

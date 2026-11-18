@@ -25,8 +25,8 @@ Windows.
 - **Android:** 8.0+ (API 26+), with USB debugging enabled.
 - **iOS:** 17.0+.
 - **Windows:** 10 or 11.
-- **Network:** same LAN as the IP camera for local discovery; Tailscale on the
-  phone and Windows PC for remote video.
+- **Network:** same LAN as the IP camera for discovery. The Windows test
+  package uses CocinaP Cloud for remote video and requires internet access.
 
 ---
 
@@ -145,31 +145,32 @@ flutter build windows --release
 ```
 
 The executable and its required runtime files are placed under
-`cocinap_mobile/build/windows/runner/Release/`. The webcam snapshot path is
-limited to about one frame per second; Windows person detection uses a single
-MoveNet pose and is not identical to mobile ML Kit.
+`cocinap_mobile/build/windows/x64/runner/Release/`. To create the test package
+with FFmpeg included, from `cocinap_mobile` run:
+
+```powershell
+flutter build windows --release
+.\scripts\package_windows_test.ps1
+```
+
+The generated ZIP at `build/CocinaP-Windows-x64-v1.0.15-test.zip` includes the
+LGPL encoder required by CocinaP Cloud. Webcam snapshots are limited to about
+one frame per second; Windows person detection uses a single MoveNet pose and
+is not identical to mobile ML Kit.
 
 ---
 
-## 5. Optional remote desktop video
+## 5. Remote video from anywhere
 
-The mobile app's remote desktop source uses a private Tailscale network; it
-does not use the legacy mDNS/QR server-connection workflow.
+On Windows, open CocinaP, confirm the camera works, and turn on **Access from
+anywhere** in Settings. On the phone, choose **Remote PC over cloud** and scan
+the QR displayed on the PC. No Tailscale installation or router changes are
+needed.
 
-1. Install Tailscale on the Windows PC and phone and sign in to the same
-   private network.
-2. Open CocinaP on Windows, select the desired camera, and enable **Allow
-   remote access** in Settings. Keep the app open and monitoring active.
-3. In PowerShell on the PC, run `tailscale serve --bg 8080`. Use
-   `tailscale serve status` to find the HTTPS address ending in `.ts.net`.
-4. Copy the API key shown in Windows Settings. In mobile **Settings**, choose
-   the remote PC camera source, enter the HTTPS address and key, and test the
-   connection.
-
-Do not expose port 8080 through router port forwarding or use Tailscale Funnel.
-The Windows PC must stay awake, connected to Tailscale, and running CocinaP.
-The phone runs its own person detector while the app is open; desktop alarms
-are not synchronized to the phone.
+The QR grants access to the video; share it only with trusted people. The PC
+must remain on and connected to the internet. Cloud access is a test feature:
+subscription management and billing are not implemented, and background push
+alerts are not available.
 
 See the [User guide](USER_GUIDE.md) for daily use.
 

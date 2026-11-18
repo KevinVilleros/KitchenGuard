@@ -8,10 +8,10 @@ componentes, cómo se comunican, el flujo de datos y las decisiones estructurale
 ## 1. Visión general
 
 CocinaP es una aplicación Flutter para **Android, iOS y Windows**. Permite
-monitorear localmente con la cámara del dispositivo o una cámara IP y compartir
-de forma segura la cámara seleccionada en Windows con un teléfono por
-Tailscale. La detección se ejecuta localmente: ML Kit Pose Detection en
-Android/iOS y MoveNet Lightning mediante ONNX Runtime en Windows.
+monitorear localmente con la cámara del dispositivo o una cámara IP y, de
+forma opcional, ver la cámara de Windows desde un móvil vinculado por QR a
+través de CocinaP Cloud. La detección se ejecuta localmente: ML Kit Pose
+Detection en Android/iOS y MoveNet Lightning mediante ONNX Runtime en Windows.
 
 ```
                          ┌───────────────────────────────────────────┐
@@ -23,22 +23,27 @@ Android/iOS y MoveNet Lightning mediante ONNX Runtime en Windows.
                          │   • Temporizador de monitoreo              │
                          │   • Alarmas locales (sonido/vibración)     │
                          │                                            │
-                         │  Video remoto de Windows (opcional)         │
-                         │   • Red privada Tailscale                  │
-                         │   • HTTPS + X-API-Key                      │
-                         │   • Stream MJPEG autenticado del PC         │
+                         │  Video remoto cloud (opcional)              │
+                         │   • QR y tokens vía Cloudflare Worker       │
+                         │   • Video en vivo por LiveKit               │
                          └───────────────┬────────────────────────────┘
-                                         │  HTTPS mediante Tailscale Serve
-                                         │  X-API-Key
+                                         │  LiveKit (stream + estado)
+                                         │  HTTPS (tokens)
                                          ▼
-                         ┌───────────────────────────────────────────┐
-                         │          CocinaP (Flutter, Windows)         │
-                         │  Cámara local y monitoreo                  │
-                         │                                            │
-   Cámara USB / IP ─────► │  MoveNet Lightning (personas)             │
-                         │  Endpoint MJPEG autenticado                │
-                         │  Tailscale Serve (HTTPS privado)            │
-                         └───────────────────────────────────────────┘
+                  ┌─────────────────────────────────────┐
+                  │   CocinaP (Flutter, Windows)        │
+                  │ Cámara local + MoveNet              │
+                  │ MJPEG local → FFmpeg/OpenH264       │
+                  └──────────────────┬──────────────────┘
+                                     │ RTMPS
+                                     ▼
+                              LiveKit Cloud
+                                     ▲
+                                     │ HTTPS: token del móvil
+                           Cloudflare Worker
+                                     ▲
+                                     │ HTTPS: QR/credenciales
+                               App móvil
 ```
 
 ---
@@ -72,6 +77,8 @@ Arquitectura por capas con patrón **Provider** para el estado.
 | Servicio | Responsabilidad |
 |---|---|
 | `RemoteDesktopService` | Valida la dirección Tailscale Serve y prueba el API del PC |
+| `RemoteCloudService` | Registra el equipo y solicita tokens cloud |
+| `RemoteCloudHostService` | Inicia el servidor MJPEG local y los publicadores de LiveKit |
 | `MjpegService` | Recibe el stream MJPEG de la cámara seleccionada |
 | `PersonDetector` | ML Kit en Android/iOS; delega a MoveNet en Windows |
 | `WindowsPersonDetector` | Inferencia MoveNet Lightning mediante ONNX Runtime |
@@ -87,10 +94,12 @@ webcam se captura en instantáneas de aproximadamente un fotograma por segundo,
 ya que `camera_windows` no ofrece un stream de imágenes. MoveNet Lightning
 detecta una persona por fotograma y su modelo/salida difieren de ML Kit móvil.
 
-Al activar el acceso remoto, `RemoteCameraServer` expone `/api/info` y
-`/api/stream` en el puerto 8080. Tailscale Serve proporciona el endpoint HTTPS
-privado que utiliza el teléfono. El PC debe permanecer encendido y CocinaP
-ejecutándose.
+Al activar el acceso cloud, `RemoteCameraServer` sirve localmente el MJPEG que
+FFmpeg publica por RTMPS a LiveKit; otro publicador envía el estado del
+monitoreo. El teléfono solicita un token al gateway Cloudflare y se conecta a
+LiveKit para recibir el video. El PC debe permanecer encendido, conectado a
+internet y con CocinaP ejecutándose. Tailscale sigue disponible como acceso
+avanzado independiente.
 
 ---
 
@@ -121,23 +130,23 @@ CameraController ──frame──► PersonDetector (ML Kit / MoveNet)
 4. Si el temporizador está activo y transcurre el umbral sin personas, se
    dispara una alerta local.
 
-### 3.2 Video remoto de escritorio (opcional)
+### 3.2 Video remoto por nube (opcional)
 
 ```
-App móvil                                  CocinaP Windows
-   │                                            │
-   │── GET /api/info  (X-API-Key) ─────────────►│  valida y responde estado de cámara
-   │◄───────────────────────────────────────────│
-   │── GET /api/stream (X-API-Key) ────────────►│  MJPEG continuo
-   │◄══════════ frames JPEG ════════════════════│
+App móvil          Cloudflare Worker         LiveKit          CocinaP Windows
+   │                     │                     │                     │
+   │── credenciales ────►│                     │                     │
+   │◄── token ───────────│                     │                     │
+   │──────────────────── conectar ────────────►│                     │
+   │◄════════ video + estado ═════════════════│◄──── RTMPS ─────────│
 ```
 
-- El usuario configura en la app una dirección HTTPS de Tailscale Serve
-  terminada en `.ts.net` y la clave API de Windows. El teléfono también
-  debe estar conectado a la misma tailnet.
-- El cliente móvil envía la clave en la cabecera `X-API-Key`, no en la URL.
-  Esta función consume solo el endpoint de información y el stream; las
-  alarmas y controles del PC no están integrados en la app móvil.
+- La PC registra su dispositivo una vez y usa una clave de propietario para
+  solicitar la publicación; el QR contiene una clave distinta de solo lectura.
+- El gateway emite tokens de corta duración. El video transita por LiveKit;
+  no se debe describir como procesamiento exclusivamente local.
+- El teléfono y el PC deben tener internet. El QR es una credencial y no debe
+  publicarse. La prueba no incluye pagos, revocación en la app ni push fiable.
 
 ---
 
@@ -148,9 +157,10 @@ App móvil                                  CocinaP Windows
 | Android/iOS | ML Kit Pose Detection | Fotograma de cámara | Poses de personas | On-device |
 | Windows | MoveNet Lightning (`movenet_lightning.onnx`) | `1x192x192x4` uint8 | Una pose de 17 puntos | On-device (ONNX Runtime) |
 
-La detección es local; el video remoto usa Tailscale y no envía imágenes a un
-servicio en la nube de CocinaP. Las instantáneas de webcam Windows limitan su
-stream a aproximadamente un fotograma por segundo.
+La detección es local. Cuando se activa el acceso remoto cloud, el video en
+vivo se transmite por LiveKit; CocinaP no tiene una función de grabación. Las
+instantáneas de webcam Windows limitan su stream a aproximadamente un
+fotograma por segundo.
 
 ---
 
@@ -164,6 +174,9 @@ stream a aproximadamente un fotograma por segundo.
 | `standalone_*` | Duración, umbrales, confianza, fuente y URL de cámara |
 | `desktop_host_api_key` | Clave del host Windows en almacenamiento seguro |
 | `desktop_remote_host_enabled` | Indica si inicia el host MJPEG Windows |
+| `cloud_gateway_url`, `cloud_device_id` | Dirección e identificador del dispositivo |
+| `cloud_owner_key`, `cloud_viewer_key` | Claves cloud en almacenamiento seguro |
+| `cloud_host_enabled` | Indica si publica la cámara por cloud |
 | `has_seen_install_guide`, `has_seen_app_tour` | Flags de primer uso |
 | `app_language` | Idioma de la interfaz (es/en) |
 
@@ -175,14 +188,16 @@ plataforma y solo se muestra en Ajustes para configurar el teléfono.
 ## 6. Comunicación de red
 
 - **Host Windows:** HTTP en el puerto 8080, enlazado a loopback por Flutter.
-- **Stream móvil remoto:** HTTPS mediante Tailscale Serve, autenticado con
-  `X-API-Key`; no expongas el puerto con redirección del router o Funnel.
-- **Endpoints:** `GET /api/info` y `GET /api/stream`.
+- **Acceso cloud:** tokens de host y móvil emitidos por el gateway; video y
+  estado viajan por LiveKit.
+- **Tailscale avanzado:** el host MJPEG local usa el puerto 8080; no expongas
+  ese puerto mediante redirección del router o Funnel.
+- **Endpoints locales:** `GET /api/info` y `GET /api/stream`.
 - **MJPEG:** sigue la fuente seleccionada; las instantáneas de webcam Windows
   se capturan aproximadamente a un fotograma por segundo.
 
-> Seguridad: no expongas el puerto 8080 a Internet ni uses Tailscale Funnel.
-> Ver [SEGURIDAD](SECURITY.md).
+> Seguridad: no compartas el QR ni expongas el puerto 8080 a Internet. Ver
+> [SEGURIDAD](SECURITY.md).
 
 ---
 
@@ -190,7 +205,7 @@ plataforma y solo se muestra en Ajustes para configurar el teléfono.
 
 | Plataforma | Notificaciones en segundo plano | Notas |
 |---|---|---|
-| Android | Sí (servicio en primer plano) | Requiere permisos de notificación y datos |
+| Android | Depende del servicio activo | No hay push remoto garantizado |
 | iOS | Solo con app abierta | Limitaciones del sistema para segundo plano |
 | Windows | Mientras la app está ejecutándose | El PC debe permanecer encendido; webcam a ~1 FPS |
 
@@ -207,12 +222,12 @@ eliminó FCM del cliente móvil para permitir compilar sin `google-services.json
                  │   Android   │        │     iOS     │
                  │  (Flutter)  │        │  (Flutter)  │
                  └──────┬──────┘        └──────┬──────┘
-                        │ HTTPS Tailscale      │
-                        └──────────┬───────────┘
-                                   │ HTTP :8080
+                        │ LiveKit / HTTPS    │
+                        └──────────┬─────────┘
+                                   │ RTMPS
                           ┌────────▼─────────┐
                           │   PC Windows     │
-                          │ CocinaP Flutter  │
+                          │ CocinaP + FFmpeg │
                           │ MoveNet + MJPEG  │
                           └────────┬─────────┘
                                    │ USB / RTSP / HTTP

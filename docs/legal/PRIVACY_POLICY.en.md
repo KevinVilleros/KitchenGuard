@@ -24,18 +24,19 @@ This Privacy Policy explains what data we process, how we use it, and what right
 
 ## 2. Core principle: local processing on your device
 
-The design of CocinaP prioritizes your privacy. In local mode, camera images
-are processed directly on your phone or Windows PC running CocinaP.
+In local mode, video is processed directly on the device. If you turn on
+**Access from anywhere** on Windows, the PC sends live video over the internet
+through CocinaP Cloud and LiveKit so the paired phone can view it. Monitoring
+status (for example, camera activity, person detection and timer state) is also
+shared to synchronize the mobile view. The CocinaP Cloud gateway uses
+Cloudflare Workers for pairing and access tokens. CocinaP does not provide a
+feature to record or save this video, but the stream does pass through
+third-party infrastructure; their terms also govern its processing and
+retention. Local modes remain available without enabling cloud access. Person
+detection runs locally on the phone or PC.
 
-**CocinaP does not provide its own cloud video storage or receive your video on
-CocinaP-operated servers.** If you configure remote Windows video, the stream
-travels from your PC to your phone over your private Tailscale network using
-HTTPS. Tailscale may relay encrypted network traffic; refer to Tailscale's
-privacy information for details about its network metadata and services. The
-mobile app requests an IP camera directly; person detection runs locally on the
-phone or Windows PC.
-
-You can review this technical implementation in the manual and project architecture (see `docs/ARCHITECTURE.md`).
+You can review this technical implementation in the manual and
+[architecture](../en/ARCHITECTURE.md).
 
 ---
 
@@ -45,9 +46,9 @@ The app may request the following permissions and process the following data, on
 
 ### 3.1 Camera permission
 - **Purpose:** capture live video of the kitchen to analyze risk sources and the presence of people.
-- **Note:** CocinaP does not record or upload camera video to its own servers.
-  When remote desktop video is enabled, video is transmitted between your PC
-  and phone over Tailscale (see Section 5).
+- **Note:** CocinaP does not provide video recording. When cloud access is
+  enabled, live video is sent from the PC through LiveKit to the paired phone
+  (see Section 5).
 
 ### 3.2 Storage permission
 - **Purpose:** store app configuration (preferences, camera URLs, detection settings) locally on your device.
@@ -86,20 +87,31 @@ if the kitchen is left unattended.
 
 **We do not sell or rent** your personal data.
 
-The app does not transmit your configuration or analyzed images to CocinaP
-servers. If you configure remote Windows video, the mobile app receives the selected
-camera stream over your Tailscale network. The mobile app stores the Windows
-address and host API key in the phone's secure storage; CocinaP Windows stores
-its host key in Windows secure storage.
+In local mode, the app does not transmit analyzed video. If cloud access is
+enabled, the CocinaP Cloud gateway (on Cloudflare Workers) receives device
+identifiers and pairing credentials to issue access tokens; video and
+monitoring status travel through LiveKit between the PC and paired phone. The
+phone can also send commands to start, pause or stop the timer. The QR contains
+a private viewing key; share it only with trusted people. The PC and phone
+store their credentials in the operating system's secure storage. Cloudflare's
+and LiveKit's terms also apply to how their services process and retain data.
+
+The test version does not manage subscriptions or process payments.
 
 ### About push notifications (additional information)
-The current version uses local notifications and does not integrate remote push notifications. Notification behavior depends on the platform and permissions granted.
+The current version uses local notifications and does not provide reliable
+remote push notifications for background monitoring. Notification behavior
+depends on the platform, permissions granted, and whether the app remains
+active.
 
 ---
 
 ## 6. Data retention
 
 - Configuration data is kept on your device until you delete it or uninstall the app.
+- Cloud connection data required for pairing may remain in Cloudflare and
+  LiveKit services according to their retention policies; the test version has
+  no in-app device revocation or cloud-log deletion feature.
 - The visible alert history for a session is temporary and may be lost when the
   app closes; the current version does not provide persistent alert history or
   an export function.

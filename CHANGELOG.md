@@ -7,6 +7,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ---
 
+## [1.0.15] - Unreleased
+
+### Added
+
+- Make CocinaP Cloud QR pairing the primary way to connect a Windows PC and a
+  phone from anywhere; keep Tailscale as an advanced option.
+- Bundle a pinned LGPL FFmpeg build with the Windows test package so cloud
+  streaming does not depend on a separate FFmpeg installation.
+
+### Fixed
+
+- Preserve the generated WorkManager database constructor from release shrinking.
+- Make desktop MJPEG response closing idempotent when the host stops while a
+  phone stream is active.
+- Use the bundled OpenH264 encoder instead of x264 for cloud video publishing.
+- Clean up cloud host resources if startup fails.
+
+### Changed
+
+- Advance the mobile package version to `1.0.15+15`.
+
+---
+
 ## [1.0.12] - Unreleased
 
 ### Fixed

@@ -11,10 +11,9 @@ tu teléfono o una cámara IP y detecta personas directamente en el dispositivo.
 
 - **Modo local:** el teléfono usa su propia cámara o una cámara IP de la red
   local. El flujo local existente no requiere un PC.
-- **Cámara Windows remota (opcional):** el teléfono recibe video de CocinaP en
-  una PC Windows. Tailscale debe estar instalado en la PC y el teléfono, ambos
-  conectados a la misma tailnet privada; consulta los pasos siguientes. Las
-  fuentes locales siguen disponibles sin Tailscale.
+- **PC remota desde cualquier lugar (opcional):** la PC publica el video por
+  CocinaP Cloud y el móvil se vincula escaneando un QR. No requiere instalar
+  Tailscale. La PC debe permanecer encendida y conectada a internet.
 
 ---
 
@@ -69,32 +68,28 @@ En **Monitoreo**, toca el icono **Dispositivos** (barra superior) o el botón
   compatibilidad. Consulta la URL RTSP en la app oficial, ajustes web o manual
   de la cámara; la lista de dispositivos del router normalmente solo muestra
   su IP.
-- **Cámara remota de Windows (opcional):** recibe video desde CocinaP en una PC
-  Windows. Requiere Tailscale en la PC y el móvil, conectados a la misma tailnet;
-  consulta los pasos siguientes. Las fuentes locales siguen disponibles sin
-  Tailscale.
+- **PC remota desde cualquier lugar (opcional):** recibe video de CocinaP en
+  Windows mediante CocinaP Cloud. La vinculación es por QR y no requiere
+  Tailscale; consulta los pasos siguientes.
 
 La hoja incluye un **tutorial breve** con las fuentes disponibles.
 
-### 4.2 Configurar acceso remoto opcional
+### 4.2 Vincular una PC Windows desde cualquier lugar
 
-1. Deja una PC Windows encendida en casa e instala Tailscale tanto en esa PC
-   como en el teléfono. Inicia sesión en ambos con la misma cuenta/red privada.
-2. Abre CocinaP en Windows, selecciona la cámara y activa **Permitir acceso
-   remoto** en Ajustes. Mantén la app abierta y el monitoreo activo.
-3. En PowerShell ejecuta `tailscale serve --bg 8080`. Usa
-   `tailscale serve status` para ver la dirección HTTPS privada terminada en
-   `.ts.net`.
-4. Conecta Tailscale en el teléfono. En Ajustes de CocinaP móvil, elige la
-   fuente de cámara del PC remoto, ingresa la dirección HTTPS y la clave API
-   que se muestra en Ajustes de Windows, y prueba la conexión.
+1. En la PC, abre CocinaP y comprueba que la cámara elegida muestre video.
+2. En **Ajustes**, activa **Acceso desde cualquier lugar**. CocinaP iniciará la
+   conexión cloud y mostrará un QR.
+3. En el móvil, abre CocinaP, entra en **Ajustes > Fuente de cámara > PC remota
+   por la nube** y escanea el QR de la PC.
+4. Mantén la PC encendida, con CocinaP abierto y conectada a internet. El móvil
+   puede recibir el video desde otra red sin configurar el router ni instalar
+   Tailscale.
 
-No configures redirección de puertos del router ni uses Tailscale Funnel. La PC
-debe permanecer encendida, sin suspensión, conectada a Tailscale y a la cámara.
-Las instantáneas de webcam Windows se envían a aproximadamente un fotograma
-por segundo. La detección del teléfono solo funciona mientras la app móvil está
-abierta; las alertas del escritorio no se sincronizan con el teléfono. Cuando no
-uses el modo remoto, puedes desactivarlo con `tailscale serve reset`.
+El QR es privado: permite acceder al video y al estado del monitoreo. Escanéalo
+solo con teléfonos de confianza. La detección y las alertas del móvil dependen
+de que la app permanezca abierta; las notificaciones push en segundo plano no están
+disponibles en esta versión. El acceso cloud está en pruebas y todavía no
+gestiona ni cobra suscripciones.
 
 ### 4.3 Iniciar el monitoreo
 
@@ -122,25 +117,10 @@ En **Ajustes** puedes configurar:
 
 ## 5. Video remoto de escritorio (opcional)
 
-Para ver la cámara del PC cuando el teléfono está fuera de casa, ambos
-dispositivos deben estar conectados a la misma red privada Tailscale:
-
-1. Instala Tailscale en el PC Windows y en el teléfono e inicia sesión en la
-   misma red privada.
-2. Abre CocinaP en Windows, selecciona la cámara y activa **Permitir acceso
-   remoto** en Ajustes. Mantén la app abierta y el monitoreo activo.
-3. En PowerShell del PC ejecuta `tailscale serve --bg 8080`. Usa
-   `tailscale serve status` para encontrar la dirección HTTPS privada terminada
-   en `.ts.net`.
-4. Copia la clave API que se muestra en Ajustes de Windows. En **Ajustes** del
-   móvil, elige la fuente de cámara del PC remoto, ingresa la dirección HTTPS y
-   la clave, y prueba la conexión.
-
-No expongas el puerto 8080 mediante el router ni uses Tailscale Funnel. El PC
-debe permanecer encendido y CocinaP ejecutándose. Las instantáneas de webcam
-se envían aproximadamente a un fotograma por segundo. El teléfono ejecuta su
-detector de personas mientras la app está abierta; las alertas del escritorio
-no se sincronizan con el móvil.
+Usa **Acceso desde cualquier lugar** en los Ajustes de Windows y vincula el
+móvil escaneando el QR, como se describe en el apartado 4.2. No es necesario
+abrir puertos del router ni instalar Tailscale. La VPN/Tailscale sigue
+disponible en los ajustes avanzados para instalaciones propias.
 
 ---
 
@@ -179,8 +159,9 @@ mientras el monitoreo está activo. No se ofrece detección de fuego ni humo.
 ## 9. Privacidad
 
 En modo local, las imágenes se procesan en el teléfono o se solicitan
-directamente a la cámara IP local. El video remoto de escritorio se transmite
-por tu red privada Tailscale. Ver [Política de privacidad](../legal/PRIVACY_POLICY.es.md).
+directamente a la cámara IP local. Si activas el acceso desde cualquier lugar,
+el video pasa por infraestructura de CocinaP Cloud y LiveKit. Ver
+[Política de privacidad](../legal/PRIVACY_POLICY.es.md).
 
 ---
 
