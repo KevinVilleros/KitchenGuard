@@ -1,0 +1,8 @@
+MoveNet Lightning ONNX model
+
+Source: https://huggingface.co/onnx-community/movenet-lightning-web
+Model file: movenet_lightning.onnx
+License: Apache License 2.0 (see ONNX-MOVENET-LICENSE.txt)
+
+Windows uses this single-person pose model for local presence detection.
+Android and iOS continue to use Google ML Kit Pose Detection.

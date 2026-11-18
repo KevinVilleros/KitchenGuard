@@ -1,17 +1,16 @@
-import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import '../content/content.dart';
 
-const _fgChannelId = 'cocinap_foreground';
-const _fgChannelName = 'CocinaP Monitor';
 const _alarmChannelId = 'cocinap_alarms';
 const _alarmChannelName = 'CocinaP Alarmas';
-const _notifId = 888;
+const _backgroundMonitoringChannel =
+    MethodChannel('com.cocinap.mobile/background_monitoring');
 
-final FlutterLocalNotificationsPlugin _notif = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _notif =
+    FlutterLocalNotificationsPlugin();
 
 class BackgroundServiceManager {
   static Future<bool> get notificationsEnabled async {
@@ -23,13 +22,13 @@ class BackgroundServiceManager {
   }
 
   static Future<void> init() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
     await _notif.initialize(
       const InitializationSettings(android: androidSettings, iOS: iosSettings),
     );
 
-    // Solicitar permiso de notificaciones (Android 13+ / iOS).
     await _notif
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -39,22 +38,6 @@ class BackgroundServiceManager {
             IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(alert: true, badge: true, sound: true);
 
-    // Foreground service channel (low importance, no sound)
-    await _notif
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(
-          AndroidNotificationChannel(
-            _fgChannelId,
-            _fgChannelName,
-            description: AppLocal.language == 'en'
-                ? 'Foreground monitoring service'
-                : 'Notificacion de servicio en primer plano',
-            importance: Importance.low,
-          ),
-        );
-
-    // Alarm notification channel (high importance, with sound)
     await _notif
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -64,77 +47,67 @@ class BackgroundServiceManager {
             _alarmChannelName,
             description: AppLocal.language == 'en'
                 ? 'Security alerts and alarms'
-                : 'Alertas y alarmas de seguridad',
+                : 'Alertas de seguridad y alarmas',
             importance: Importance.high,
             playSound: true,
             enableVibration: true,
           ),
         );
-
-    final service = FlutterBackgroundService();
-
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: true,
-        isForegroundMode: true,
-        notificationChannelId: _fgChannelId,
-        initialNotificationTitle: 'CocinaP',
-        initialNotificationContent: AppLocal.language == 'en'
-            ? 'Monitoring kitchen...'
-            : 'Monitoreando cocina...',
-        foregroundServiceNotificationId: _notifId,
-        foregroundServiceTypes: [AndroidForegroundType.dataSync],
-      ),
-      iosConfiguration: IosConfiguration(
-        onForeground: onStart,
-        autoStart: false,
-      ),
-    );
-
   }
 
-  static Future<void> startMonitoring(int remainingSeconds) async {
-    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android &&
-        defaultTargetPlatform != TargetPlatform.iOS)) {
-      return;
-    }
-    final service = FlutterBackgroundService();
-    final running = await service.isRunning();
-    if (!running) {
-      await service.startService();
-    }
-    service.invoke('updateStatus', {
-      'status': AppLocal.language == 'en'
-          ? 'Monitoring active: ${remainingSeconds ~/ 60} min'
-          : 'Monitoreo activo: ${remainingSeconds ~/ 60} min'
-    });
+  static Future<void> startMonitoring({
+    required int remainingSeconds,
+    required double confidence,
+    required int noPersonAlertSeconds,
+    required List<int> alertIntervals,
+    required bool intervalAlertsEnabled,
+    required bool repeatLastInterval,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _backgroundMonitoringChannel.invokeMethod<void>(
+      'startMonitoring',
+      {
+        'remainingSeconds': remainingSeconds,
+        'confidence': confidence,
+        'noPersonAlertSeconds': noPersonAlertSeconds,
+        'alertIntervals': alertIntervals,
+        'intervalAlertsEnabled': intervalAlertsEnabled,
+        'repeatLastInterval': repeatLastInterval,
+        'language': AppLocal.language,
+      },
+    );
+  }
+
+  static Future<void> setCameraActive(bool active) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _backgroundMonitoringChannel.invokeMethod<void>(
+      'setCameraActive',
+      active,
+    );
+  }
+
+  static Future<Map<String, dynamic>?> getMonitoringState() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    return _backgroundMonitoringChannel.invokeMapMethod<String, dynamic>(
+      'getMonitoringState',
+    );
   }
 
   static Future<void> stopMonitoring() async {
-    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android &&
-        defaultTargetPlatform != TargetPlatform.iOS)) {
-      return;
-    }
-    final service = FlutterBackgroundService();
-    if (await service.isRunning()) {
-      service.invoke('stopService');
-    }
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _backgroundMonitoringChannel.invokeMethod<void>('stopMonitoring');
   }
 
   static Future<void> showAlarm(String alert) async {
-    final service = FlutterBackgroundService();
-    service.invoke('updateAlarm', {"alert": alert});
     await _showAlarmNotification(alert);
   }
 
   static Future<void> updateStatus(String status) async {
-    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android &&
-        defaultTargetPlatform != TargetPlatform.iOS)) {
-      return;
-    }
-    final service = FlutterBackgroundService();
-    service.invoke('updateStatus', {"status": status});
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _backgroundMonitoringChannel.invokeMethod<void>(
+      'updateStatus',
+      status,
+    );
   }
 
   static Future<void> sendTestAlarm() async {
@@ -151,7 +124,7 @@ class BackgroundServiceManager {
       _alarmChannelName,
       channelDescription: AppLocal.language == 'en'
           ? 'Security alerts and alarms'
-          : 'Alertas y alarmas de seguridad',
+          : 'Alertas de seguridad y alarmas',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
@@ -167,62 +140,4 @@ class BackgroundServiceManager {
       NotificationDetails(android: androidDetails, iOS: iosDetails),
     );
   }
-}
-
-@pragma('vm:entry-point')
-void onStart(ServiceInstance service) {
-  DartPluginRegistrant.ensureInitialized();
-
-  if (service is AndroidServiceInstance) {
-    service.setForegroundNotificationInfo(
-      title: 'CocinaP',
-      content: AppLocal.language == 'en'
-          ? 'Monitoring kitchen...'
-          : 'Monitoreando cocina...',
-    );
-  }
-
-  service.on('stopService').listen((_) {
-    service.stopSelf();
-  });
-
-  service.on('updateAlarm').listen((data) {
-    if (data != null && data["alert"] != null) {
-      _showAlarmNotification(data["alert"] as String);
-    }
-  });
-
-  service.on('updateStatus').listen((data) {
-    if (data != null && data["status"] != null) {
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: 'CocinaP',
-          content: data["status"] as String,
-        );
-      }
-    }
-  });
-}
-
-void _showAlarmNotification(String alert) {
-  final androidDetails = AndroidNotificationDetails(
-    _alarmChannelId,
-    _alarmChannelName,
-    channelDescription: AppLocal.language == 'en'
-        ? 'Security alerts and alarms'
-        : 'Alertas y alarmas de seguridad',
-    importance: Importance.high,
-    priority: Priority.high,
-    playSound: true,
-    enableVibration: true,
-    fullScreenIntent: true,
-  );
-  const iosDetails = DarwinNotificationDetails();
-  final id = DateTime.now().millisecondsSinceEpoch % 100000;
-  _notif.show(
-    id,
-    AppLocal.language == 'en' ? 'CocinaP - Alarm' : 'CocinaP - Alarma',
-    alert,
-    NotificationDetails(android: androidDetails, iOS: iosDetails),
-  );
 }

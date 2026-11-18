@@ -84,7 +84,7 @@ void main() {
           if (body.contains('GetCapabilities')) {
             request.response.write('''
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
-  <s:Body><tds:GetCapabilitiesResponse><tds:Capabilities><tt:Media><tt:XAddr>http://127.0.0.1:${server.port}/media</tt:XAddr></tt:Media></tds:Capabilities></tds:GetCapabilitiesResponse></s:Body>
+  <s:Body><tds:GetCapabilitiesResponse><tds:Capabilities><tt:Media><tt:XAddr>http://camera.local:${server.port}/media</tt:XAddr></tt:Media></tds:Capabilities></tds:GetCapabilitiesResponse></s:Body>
 </s:Envelope>
 ''');
           } else if (body.contains('GetProfiles')) {
@@ -96,7 +96,7 @@ void main() {
           } else {
             request.response.write('''
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:tt="http://www.onvif.org/ver10/schema">
-  <s:Body><tt:GetStreamUriResponse><tt:MediaUri><tt:Uri>rtsp://127.0.0.1:554/stream</tt:Uri></tt:MediaUri></tt:GetStreamUriResponse></s:Body>
+  <s:Body><tt:GetStreamUriResponse><tt:MediaUri><tt:Uri>rtsp://camera.local:8554/live/ch0</tt:Uri></tt:MediaUri></tt:GetStreamUriResponse></s:Body>
 </s:Envelope>
 ''');
           }
@@ -125,7 +125,9 @@ void main() {
         );
 
         expect(streamUri.host, '127.0.0.1');
-        expect(streamUri.path, '/stream');
+        expect(streamUri.port, 8554);
+        expect(streamUri.path, '/live/ch0');
+        expect(streamUri.userInfo, 'test-user:test-password');
         expect(receivedAuthorizedRequests, hasLength(3));
       });
     }
@@ -152,7 +154,8 @@ void main() {
       expect(camera.deviceService.path, '/onvif/device_service');
     });
 
-    test('rejects an endpoint that does not match the responding device', () {
+    test('rewrites an advertised hostname to the responding camera address',
+        () {
       const response = '''
 <e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope"
   xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
@@ -162,10 +165,11 @@ void main() {
 </e:Envelope>
 ''';
 
-      expect(
-        OnvifCameraService.parseProbeResponse(response, '192.168.1.56'),
-        isNull,
-      );
+      final camera =
+          OnvifCameraService.parseProbeResponse(response, '192.168.1.56');
+      expect(camera, isNotNull);
+      expect(camera!.deviceService.host, '192.168.1.56');
+      expect(camera.deviceService.path, '/onvif/device_service');
     });
 
     test('rejects a discovery endpoint containing embedded credentials', () {
@@ -220,5 +224,26 @@ void main() {
       expect(camera, isNotNull);
       expect(camera!.name, 'Camera at 192.168.1.56');
     });
+  });
+
+  test('normalizes RTSP host while preserving port and stream path', () {
+    final uri = OnvifCameraService.normalizeCameraEndpoint(
+      'rtsp://localhost:8554/live/ch0?profile=main',
+      scheme: 'rtsp',
+      host: '192.168.1.56',
+    );
+
+    expect(uri, Uri.parse('rtsp://192.168.1.56:8554/live/ch0?profile=main'));
+  });
+
+  test('rejects ONVIF endpoints containing embedded credentials', () {
+    expect(
+      OnvifCameraService.normalizeCameraEndpoint(
+        'rtsp://user:password@camera.local/live',
+        scheme: 'rtsp',
+        host: '192.168.1.56',
+      ),
+      isNull,
+    );
   });
 }

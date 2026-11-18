@@ -1,10 +1,20 @@
+import 'dart:math';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'remote_cloud_service.dart';
 
 class SettingsService {
   static const _keyServerUrl = 'server_url';
   static const _keyRecentServers = 'recent_servers';
   static const _keyApiKey = 'api_key';
+  static const _keyDesktopHostApiKey = 'desktop_host_api_key';
+  static const _keyDesktopRemoteHostEnabled = 'desktop_remote_host_enabled';
+  static const _keyCloudGatewayUrl = 'cloud_gateway_url';
+  static const _keyCloudDeviceId = 'cloud_device_id';
+  static const _keyCloudOwnerKey = 'cloud_owner_key';
+  static const _keyCloudViewerKey = 'cloud_viewer_key';
+  static const _keyCloudHostEnabled = 'cloud_host_enabled';
   static const _keyStandaloneDuration = 'standalone_duration';
   static const _keyStandaloneNoPerson = 'standalone_no_person_seconds';
   static const _keyStandaloneDanger = 'standalone_danger_minutes';
@@ -19,6 +29,7 @@ class SettingsService {
   static const _keyIntervalAlertsEnabled = 'alert_intervals_enabled';
   static const _keyAlertRepeatMode = 'alert_repeat_mode';
   static const _maxRecents = 5;
+  static final _secureRandom = Random.secure();
   static const _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
     iOptions: IOSOptions(
@@ -63,6 +74,84 @@ class SettingsService {
       await _secureStorage.write(key: _keyApiKey, value: key);
     }
     await prefs.remove(_keyApiKey);
+  }
+
+  Future<String> getDesktopHostApiKey() async {
+    final key = await _secureStorage.read(key: _keyDesktopHostApiKey);
+    if (key != null && key.isNotEmpty) return key;
+
+    final bytes = List<int>.generate(32, (_) => _secureRandom.nextInt(256));
+    final generated =
+        bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    await _secureStorage.write(key: _keyDesktopHostApiKey, value: generated);
+    return generated;
+  }
+
+  Future<bool> getDesktopRemoteHostEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyDesktopRemoteHostEnabled) ?? false;
+  }
+
+  Future<void> setDesktopRemoteHostEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyDesktopRemoteHostEnabled, enabled);
+  }
+
+  Future<RemoteCloudCredentials?> getRemoteCloudCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final gatewayUrl = prefs.getString(_keyCloudGatewayUrl);
+    final deviceId = prefs.getString(_keyCloudDeviceId);
+    final ownerKey = await _secureStorage.read(key: _keyCloudOwnerKey);
+    final viewerKey = await _secureStorage.read(key: _keyCloudViewerKey);
+    if (gatewayUrl == null ||
+        deviceId == null ||
+        viewerKey == null ||
+        viewerKey.isEmpty) {
+      return null;
+    }
+    return RemoteCloudCredentials.fromJson({
+      'gatewayUrl': gatewayUrl,
+      'deviceId': deviceId,
+      'ownerKey': ownerKey ?? '',
+      'viewerKey': viewerKey,
+    });
+  }
+
+  Future<void> setRemoteCloudCredentials(
+    RemoteCloudCredentials? credentials,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (credentials == null) {
+      await prefs.remove(_keyCloudGatewayUrl);
+      await prefs.remove(_keyCloudDeviceId);
+      await _secureStorage.delete(key: _keyCloudOwnerKey);
+      await _secureStorage.delete(key: _keyCloudViewerKey);
+      return;
+    }
+    await prefs.setString(_keyCloudGatewayUrl, credentials.gatewayUrl);
+    await prefs.setString(_keyCloudDeviceId, credentials.deviceId);
+    if (credentials.ownerKey.isEmpty) {
+      await _secureStorage.delete(key: _keyCloudOwnerKey);
+    } else {
+      await _secureStorage.write(
+        key: _keyCloudOwnerKey,
+        value: credentials.ownerKey,
+      );
+    }
+    await _secureStorage.write(
+      key: _keyCloudViewerKey,
+      value: credentials.viewerKey,
+    );
+  }
+
+  Future<bool> getRemoteCloudHostEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyCloudHostEnabled) ?? false;
+  }
+
+  Future<void> setRemoteCloudHostEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCloudHostEnabled, enabled);
   }
 
   Future<int> getStandaloneDuration() async {
@@ -112,7 +201,13 @@ class SettingsService {
 
   Future<void> setStandaloneSourceIndex(int index) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyStandaloneSource, index == 1 ? 'ip' : 'phone');
+    final source = switch (index) {
+      1 => 'ip',
+      2 => 'remote',
+      3 => 'cloud',
+      _ => 'phone',
+    };
+    await prefs.setString(_keyStandaloneSource, source);
   }
 
   Future<String> getStandaloneCameraUrl() async {

@@ -7,14 +7,22 @@ import '../content/content.dart';
 enum StandaloneCameraSource {
   /// Cámara integrada / USB del propio móvil.
   phone,
+
   /// Cámara IP del hogar o de seguridad vía stream HTTP/MJPEG o RTSP.
   ipCamera,
+
+  /// Stream MJPEG autenticado de CocinaP Escritorio sobre una VPN privada.
+  remoteDesktop,
+
+  /// Video y estado de monitoreo remotos mediante CocinaP Cloud.
+  remoteCloud,
 }
 
 /// Modo de repetición de las alertas cuando la cocina sigue desatendida.
 enum AlertRepeatMode {
   /// Repite el último intervalo indefinidamente.
   repeatLast,
+
   /// Emite cada intervalo configurado una sola vez y luego deja de avisar.
   oncePerInterval,
 }
@@ -49,6 +57,10 @@ class AlertInterval {
 class StandaloneProvider extends ChangeNotifier {
   StandaloneCameraSource _cameraSource = StandaloneCameraSource.phone;
   String _cameraUrl = "";
+  String _desktopServerUrl = "";
+  String _desktopApiKey = "";
+  Uint8List? _latestCameraJpeg;
+  DateTime? _latestCameraFrameAt;
 
   // --- Timer de monitoreo (plazo estimado de cocción) ---
   int _durationMinutes = 30;
@@ -95,12 +107,20 @@ class StandaloneProvider extends ChangeNotifier {
 
   StandaloneCameraSource get cameraSource => _cameraSource;
   String get cameraUrl => _cameraUrl;
+  String get desktopServerUrl => _desktopServerUrl;
+  String get desktopApiKey => _desktopApiKey;
+  Uint8List? get latestCameraJpeg => _latestCameraJpeg;
+  DateTime? get latestCameraFrameAt => _latestCameraFrameAt;
   int get durationMinutes => _durationMinutes;
   int get remainingSeconds => _remainingSeconds;
   bool get timerRunning => _timerRunning;
   bool get timerPaused => _timerPaused;
   bool get personPresent => _personPresent;
   bool get cameraActive => _cameraActive;
+  DateTime? get lastPersonSeen => _lastPersonSeen;
+  DateTime? get lastAlertAt => _lastAlertAt;
+  Set<int> get firedIntervals => Set.unmodifiable(_firedIntervals);
+  StandaloneAlert? get latestAlert => _alerts.isEmpty ? null : _alerts.first;
   double get lastScore => _lastScore;
   double get confidence => _confidence;
   int get noPersonAlertSeconds => _noPersonAlertSeconds;
@@ -139,9 +159,24 @@ class StandaloneProvider extends ChangeNotifier {
   String get cameraSourceLabel {
     switch (_cameraSource) {
       case StandaloneCameraSource.phone:
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          return AppLocal.language == "en"
+              ? "Windows camera"
+              : "Cámara de Windows";
+        }
         return AppLocal.language == "en" ? "Phone camera" : "Cámara del móvil";
       case StandaloneCameraSource.ipCamera:
-        return AppLocal.language == "en" ? "IP camera (home/security)" : "Cámara IP (hogar/seguridad)";
+        return AppLocal.language == "en"
+            ? "IP camera (home/security)"
+            : "Cámara IP (hogar/seguridad)";
+      case StandaloneCameraSource.remoteDesktop:
+        return AppLocal.language == "en"
+            ? "Remote CocinaP Desktop"
+            : "CocinaP Escritorio remoto";
+      case StandaloneCameraSource.remoteCloud:
+        return AppLocal.language == "en"
+            ? "Remote PC over CocinaP Cloud"
+            : "PC remota por CocinaP Cloud";
     }
   }
 
@@ -157,6 +192,18 @@ class StandaloneProvider extends ChangeNotifier {
   void setCameraUrl(String url) {
     _cameraUrl = url.trim();
     notifyListeners();
+  }
+
+  void setDesktopConnection(
+      {required String serverUrl, required String apiKey}) {
+    _desktopServerUrl = serverUrl.trim();
+    _desktopApiKey = apiKey.trim();
+    notifyListeners();
+  }
+
+  void setLatestCameraJpeg(Uint8List? jpeg) {
+    _latestCameraJpeg = jpeg;
+    _latestCameraFrameAt = jpeg == null ? null : DateTime.now();
   }
 
   // --- Timer ---
@@ -288,8 +335,7 @@ class StandaloneProvider extends ChangeNotifier {
 
     final confirmedPresent =
         _consecutivePresentFrames >= _presenceConfirmFrames;
-    final confirmedAbsent =
-        _consecutiveAbsentFrames >= _absenceConfirmFrames;
+    final confirmedAbsent = _consecutiveAbsentFrames >= _absenceConfirmFrames;
 
     if (confirmedPresent) {
       _lastPersonSeen = DateTime.now();
@@ -309,10 +355,99 @@ class StandaloneProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void syncBackgroundDetection({
+    required int lastPersonSeenMillis,
+    required bool personPresent,
+    required int consecutivePresentFrames,
+    required int consecutiveAbsentFrames,
+    required List<int> firedIntervals,
+    required int? lastAlertMillis,
+    required int? lastAlertInterval,
+    required String? lastAlertMessage,
+  }) {
+    final previousAlertMillis = _lastAlertAt?.millisecondsSinceEpoch;
+    _lastPersonSeen = DateTime.fromMillisecondsSinceEpoch(lastPersonSeenMillis);
+    _personPresent = personPresent;
+    _consecutivePresentFrames = consecutivePresentFrames;
+    _consecutiveAbsentFrames = consecutiveAbsentFrames;
+    _firedIntervals
+      ..clear()
+      ..addAll(firedIntervals);
+    _lastAlertAt = lastAlertMillis == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(lastAlertMillis);
+
+    if (lastAlertMillis != null &&
+        lastAlertMillis != previousAlertMillis &&
+        lastAlertMessage != null &&
+        lastAlertInterval != null) {
+      _alerts.insert(
+        0,
+        StandaloneAlert(
+          lastAlertMessage,
+          DateTime.fromMillisecondsSinceEpoch(lastAlertMillis),
+          atMinute: lastAlertInterval,
+        ),
+      );
+      if (_alerts.length > 100) _alerts.removeLast();
+    }
+    notifyListeners();
+  }
+
+  void syncRemoteMonitoring({
+    required bool personPresent,
+    required bool timerRunning,
+    required int remainingSeconds,
+    bool timerPaused = false,
+    int? durationMinutes,
+    required int? lastPersonSeenMillis,
+    required List<int> firedIntervals,
+    required int? lastAlertMillis,
+    required int? lastAlertInterval,
+    required String? lastAlertMessage,
+  }) {
+    _timerTick?.cancel();
+    final previousAlertMillis = _lastAlertAt?.millisecondsSinceEpoch;
+    _personPresent = personPresent;
+    _cameraActive = true;
+    _timerRunning = timerRunning;
+    _timerPaused = timerRunning && timerPaused;
+    if (durationMinutes != null) {
+      _durationMinutes = durationMinutes.clamp(1, 240).toInt();
+    }
+    _remainingSeconds = remainingSeconds.clamp(0, _durationMinutes * 60);
+    _lastPersonSeen = lastPersonSeenMillis == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(lastPersonSeenMillis);
+    _firedIntervals
+      ..clear()
+      ..addAll(firedIntervals);
+    _lastAlertAt = lastAlertMillis == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(lastAlertMillis);
+
+    if (lastAlertMillis != null &&
+        lastAlertMillis != previousAlertMillis &&
+        lastAlertMessage != null &&
+        lastAlertInterval != null) {
+      _alerts.insert(
+        0,
+        StandaloneAlert(
+          lastAlertMessage,
+          DateTime.fromMillisecondsSinceEpoch(lastAlertMillis),
+          atMinute: lastAlertInterval,
+        ),
+      );
+      if (_alerts.length > 100) _alerts.removeLast();
+    }
+    notifyListeners();
+  }
+
   Future<void> _persistSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('standalone_session_running', true);
-    await prefs.setInt('standalone_session_remaining_seconds', _remainingSeconds);
+    await prefs.setInt(
+        'standalone_session_remaining_seconds', _remainingSeconds);
     await prefs.setInt('standalone_session_duration_minutes', _durationMinutes);
     await prefs.setInt(
       'standalone_session_started_at_ms',
@@ -344,7 +479,8 @@ class StandaloneProvider extends ChangeNotifier {
     _remainingSeconds = remaining;
     _timerRunning = true;
     _timerPaused = false;
-    _timerStartedAt = DateTime.now().subtract(Duration(seconds: elapsedSeconds));
+    _timerStartedAt =
+        DateTime.now().subtract(Duration(seconds: elapsedSeconds));
     _timerTick?.cancel();
     _timerTick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     notifyListeners();
@@ -387,8 +523,7 @@ class StandaloneProvider extends ChangeNotifier {
     // Repetición del último intervalo cuando se configuró así.
     if (_repeatMode == AlertRepeatMode.repeatLast) {
       final last = intervals.last;
-      if (minutes >= last &&
-          _firedIntervals.length >= intervals.length) {
+      if (minutes >= last && _firedIntervals.length >= intervals.length) {
         final lastFired = _lastAlertAt;
         if (lastFired == null) return last;
         final since = DateTime.now().difference(lastFired).inSeconds;
@@ -404,7 +539,8 @@ class StandaloneProvider extends ChangeNotifier {
     _firedIntervals.add(minutes);
     _alerted = true;
     _lastAlertAt = DateTime.now();
-    _alerts.insert(0, StandaloneAlert(message, DateTime.now(), atMinute: minutes));
+    _alerts.insert(
+        0, StandaloneAlert(message, DateTime.now(), atMinute: minutes));
     if (_alerts.length > 100) _alerts.removeLast();
     notifyListeners();
   }
@@ -423,12 +559,20 @@ class StandaloneProvider extends ChangeNotifier {
   String get statusText {
     final lang = AppLocal.language;
     if (!_timerRunning) {
-      return lang == "en" ? "Start the monitoring timer" : "Inicia el tiempo de monitoreo";
+      return lang == "en"
+          ? "Start the monitoring timer"
+          : "Inicia el tiempo de monitoreo";
     }
-    if (_timerPaused) return lang == "en" ? "Monitoring PAUSED" : "Monitoreo en PAUSA";
-    if (!_cameraActive) return lang == "en" ? "Starting camera..." : "Iniciando cámara...";
+    if (_timerPaused) {
+      return lang == "en" ? "Monitoring PAUSED" : "Monitoreo en PAUSA";
+    }
+    if (!_cameraActive) {
+      return lang == "en" ? "Starting camera..." : "Iniciando cámara...";
+    }
     if (_personPresent) {
-      return lang == "en" ? "Person detected - kitchen attended" : "Persona detectada - cocina atendida";
+      return lang == "en"
+          ? "Person detected - kitchen attended"
+          : "Persona detectada - cocina atendida";
     }
     final m = absenceMinutes;
     return lang == "en"

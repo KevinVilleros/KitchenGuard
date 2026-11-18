@@ -14,8 +14,8 @@ despliegue de un escritorio en cada cocina no escala.
 
 Adoptar una **app móvil Flutter** (Android e iOS) como tecnología principal del
 producto, capaz de operar de forma completamente independiente con la cámara del
-teléfono y detección on-device. El escritorio Python pasa a ser un backend
-opcional complementario.
+teléfono y detección on-device. El escritorio Python se conservó inicialmente
+como backend opcional y luego se retiró; ver ADR 0005.
 
 ## Consecuencias
 
@@ -27,6 +27,3 @@ opcional complementario.
 **Negativas**
 - Se necesita aprender/afinar el ecosistema Flutter y Dart.
 - La compilación de iOS requiere infraestructura adicional (ver ADR 0006).
-
-**Neutrales**
-- El backend Python se conserva para quien quiera detección de fuego/humo.

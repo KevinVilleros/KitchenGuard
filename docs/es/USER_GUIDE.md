@@ -9,9 +9,12 @@ Guía de uso de la aplicación móvil **CocinaP** y del sistema completo.
 CocinaP vigila tu cocina y te avisa si queda **desatendida**. Usa la cámara de
 tu teléfono o una cámara IP y detecta personas directamente en el dispositivo.
 
-- **Modo independiente:** solo con tu teléfono. No necesita PC ni Internet.
-- **Modo conectado:** si tienes el PC con CocinaP, la app se conecta por WiFi y
-  añade la cámara del PC y las alarmas de **fuego y humo**.
+- **Modo local:** el teléfono usa su propia cámara o una cámara IP de la red
+  local. El flujo local existente no requiere un PC.
+- **Cámara Windows remota (opcional):** el teléfono recibe video de CocinaP en
+  una PC Windows. Tailscale debe estar instalado en la PC y el teléfono, ambos
+  conectados a la misma tailnet privada; consulta los pasos siguientes. Las
+  fuentes locales siguen disponibles sin Tailscale.
 
 ---
 
@@ -61,14 +64,39 @@ En **Monitoreo**, toca el icono **Dispositivos** (barra superior) o el botón
   guardan de forma segura en el dispositivo.
   ONVIF y RTSP pueden requerir credenciales distintas; usa las de RTSP cuando
   la app las solicite. Si falla ONVIF, puedes probar la ruta RTSP `/stream2`;
-  confirma que sea compatible con tu cámara y ajusta la URL si hace falta.
-- **PC con CocinaP:** si está conectado, abre la cámara del PC; si no, te lleva
-  a **Conectar**.
+  también puedes tocar el lápiz junto a la cámara encontrada para editar una
+  URL sugerida con su IP. Las rutas sugeridas son ejemplos comunes, no garantizan
+  compatibilidad. Consulta la URL RTSP en la app oficial, ajustes web o manual
+  de la cámara; la lista de dispositivos del router normalmente solo muestra
+  su IP.
+- **Cámara remota de Windows (opcional):** recibe video desde CocinaP en una PC
+  Windows. Requiere Tailscale en la PC y el móvil, conectados a la misma tailnet;
+  consulta los pasos siguientes. Las fuentes locales siguen disponibles sin
+  Tailscale.
 
-La hoja incluye un **tutorial breve** con las tres formas de conectar una
-cámara.
+La hoja incluye un **tutorial breve** con las fuentes disponibles.
 
-### 4.2 Iniciar el monitoreo
+### 4.2 Configurar acceso remoto opcional
+
+1. Deja una PC Windows encendida en casa e instala Tailscale tanto en esa PC
+   como en el teléfono. Inicia sesión en ambos con la misma cuenta/red privada.
+2. Abre CocinaP en Windows, selecciona la cámara y activa **Permitir acceso
+   remoto** en Ajustes. Mantén la app abierta y el monitoreo activo.
+3. En PowerShell ejecuta `tailscale serve --bg 8080`. Usa
+   `tailscale serve status` para ver la dirección HTTPS privada terminada en
+   `.ts.net`.
+4. Conecta Tailscale en el teléfono. En Ajustes de CocinaP móvil, elige la
+   fuente de cámara del PC remoto, ingresa la dirección HTTPS y la clave API
+   que se muestra en Ajustes de Windows, y prueba la conexión.
+
+No configures redirección de puertos del router ni uses Tailscale Funnel. La PC
+debe permanecer encendida, sin suspensión, conectada a Tailscale y a la cámara.
+Las instantáneas de webcam Windows se envían a aproximadamente un fotograma
+por segundo. La detección del teléfono solo funciona mientras la app móvil está
+abierta; las alertas del escritorio no se sincronizan con el teléfono. Cuando no
+uses el modo remoto, puedes desactivarlo con `tailscale serve reset`.
+
+### 4.3 Iniciar el monitoreo
 
 1. Elige la duración del **plazo de monitoreo** (por ejemplo 15, 30 o 60 min).
 2. Pulsa **Iniciar**. El temporizador empieza la cuenta atrás.
@@ -78,7 +106,7 @@ cámara.
      (sonido y vibración) y una notificación.
 4. Puedes **Pausar**, **Reanudar** o **Detener** en cualquier momento.
 
-### 4.3 Ajustes del monitoreo
+### 4.4 Ajustes del monitoreo
 
 En **Ajustes** puedes configurar:
 
@@ -88,41 +116,38 @@ En **Ajustes** puedes configurar:
 | Segundos sin persona para alertar | Umbral de ausencia |
 | Minutos de peligro | Tiempo considerado peligroso sin atender |
 | Confianza de detección | Sensibilidad del detector (0.2–0.9) |
-| Fuente de cámara | Móvil o IP |
+| Fuente de cámara | Móvil, IP local o PC remota |
 
 ---
 
-## 5. Conectar con el PC (modo conectado)
+## 5. Video remoto de escritorio (opcional)
 
-Si tienes el PC con CocinaP en la misma red WiFi:
+Para ver la cámara del PC cuando el teléfono está fuera de casa, ambos
+dispositivos deben estar conectados a la misma red privada Tailscale:
 
-1. Ve a la pestaña **Conectar**.
-2. Elige un método:
+1. Instala Tailscale en el PC Windows y en el teléfono e inicia sesión en la
+   misma red privada.
+2. Abre CocinaP en Windows, selecciona la cámara y activa **Permitir acceso
+   remoto** en Ajustes. Mantén la app abierta y el monitoreo activo.
+3. En PowerShell del PC ejecuta `tailscale serve --bg 8080`. Usa
+   `tailscale serve status` para encontrar la dirección HTTPS privada terminada
+   en `.ts.net`.
+4. Copia la clave API que se muestra en Ajustes de Windows. En **Ajustes** del
+   móvil, elige la fuente de cámara del PC remoto, ingresa la dirección HTTPS y
+   la clave, y prueba la conexión.
 
-   | Método | Cómo se usa |
-   |---|---|
-   | **Buscar en la red** | Pulsa buscar; encuentra el PC por mDNS |
-   | **Escanear QR** | En el PC pulsa "Mostrar código QR" y escanéalo |
-   | **Manual** | Escribe `http://IP:8080` y la API key |
-
-3. Cuando el estado sea **Conectado**, la pestaña **Alarmas** y la cámara del PC
-   quedan disponibles.
-
-La app recuerda el último servidor y puede reconectarse automáticamente.
+No expongas el puerto 8080 mediante el router ni uses Tailscale Funnel. El PC
+debe permanecer encendido y CocinaP ejecutándose. Las instantáneas de webcam
+se envían aproximadamente a un fotograma por segundo. El teléfono ejecuta su
+detector de personas mientras la app está abierta; las alertas del escritorio
+no se sincronizan con el móvil.
 
 ---
 
 ## 6. Alarmas
 
-La pestaña **Alarmas** muestra el historial en tiempo real (recibido por SSE del
-PC). Cada alarma incluye:
-
-- **Hora**
-- **Severidad:** CRÍTICO, ALTO, MEDIO, BAJO
-- **Mensaje** y **tipo** (fuego, humo, cocina desatendida)
-
-Además de las alarmas del PC, en modo independiente la app genera **alertas
-locales** de cocina desatendida con sonido y vibración.
+La app genera alertas locales de cocina desatendida con sonido y vibración
+mientras el monitoreo está activo. No se ofrece detección de fuego ni humo.
 
 ---
 
@@ -130,9 +155,8 @@ locales** de cocina desatendida con sonido y vibración.
 
 | Sección | Opciones |
 |---|---|
-| Conexión | Servidor, API key, auto-conexión, servidores recientes |
 | Monitoreo | Duración, umbrales, confianza |
-| Cámara | Fuente (móvil/IP), URL |
+| Cámara | Fuente (móvil, cámara IP o video remoto de escritorio opcional) |
 | Interfaz | Idioma (ES/EN), repetir tour |
 | Guías | Manual, guía de cámaras, términos |
 | Acerca de | Versión y créditos |
@@ -148,23 +172,27 @@ locales** de cocina desatendida con sonido y vibración.
   el mismo Wi-Fi; también puedes introducir la URL HTTP/MJPEG o RTSP manualmente.
 - **Ahorro de batería:** el monitoreo con cámara consume batería; mantén el
   teléfono cargando en sesiones largas.
-- **Fuego y humo:** requieren el PC conectado (la app móvil sola detecta solo
-  personas).
+- **Fuego y humo:** CocinaP no los detecta.
 
 ---
 
 ## 9. Privacidad
 
-Las imágenes se procesan **en el dispositivo** o en tu propio PC; no se envían a
-servidores externos. Ver [Política de privacidad](../legal/PRIVACY_POLICY.es.md).
+En modo local, las imágenes se procesan en el teléfono o se solicitan
+directamente a la cámara IP local. El video remoto de escritorio se transmite
+por tu red privada Tailscale. Ver [Política de privacidad](../legal/PRIVACY_POLICY.es.md).
 
 ---
 
 ## 10. Atajos y detalles
 
 - **Idioma:** Español por defecto, cambia a English en Ajustes.
-- **Notificaciones:** Android permite avisos en segundo plano; iOS solo con la
-  app abierta. iOS también suspende el video de la cámara IP al salir de la app.
+- **Segundo plano:** en Android, el monitoreo con la cámara del teléfono usa un
+  servicio visible con notificación permanente. Las cámaras IP requieren que
+  CocinaP permanezca abierta. En iPhone, la cámara y la detección se pausan al
+  salir de la app; el monitoreo continuo requiere un host externo y
+  notificaciones push, aún no disponibles. El modo Android debe validarse en
+  un teléfono físico y el sistema puede limitarlo por ahorro de batería.
 - **Reconexión de cámara:** el stream IP se reintenta automáticamente y puedes
   usar el botón de actualizar. Al volver a la app, se reconecta si iOS o Android
   había pausado el video.

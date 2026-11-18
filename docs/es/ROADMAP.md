@@ -4,35 +4,35 @@ Estado actual y funcionalidades planificadas. Es un documento vivo.
 
 ---
 
-## Estado actual (v1.0.2-pre)
+## Estado actual (v1.0.12-pre)
 
 ### Completado
 
-- App móvil Flutter (Android + iOS) con 5 pestañas.
+- App Flutter para Android, iOS y Windows.
 - Modo independiente: cámara del móvil o cámara IP.
 - Descubrimiento ONVIF en la red local; reproducción RTSP y HTTP/MJPEG.
-- Detección de personas **on-device** con TFLite (SSD MobileNet V2 / COCO).
+- Detección de personas **on-device** con ML Kit en móvil y MoveNet en Windows.
 - Temporizador de monitoreo con pausa/reanudar/detener.
 - Alertas locales (sonido + vibración) por cocina desatendida.
 - Notificaciones locales en segundo plano (Android).
-- Conexión al PC: mDNS, QR y manual.
-- Stream MJPEG del PC y alarmas por SSE.
-- Backend Python/YOLO con detección de fuego/humo (archivado en `yolo/`).
-- Seguridad del backend: API key, rate limiting, auditoría.
+- Fuente de cámara remota de Windows mediante Tailscale Serve.
+- Stream MJPEG autenticado de Windows mediante Tailscale Serve.
 - Interfaz bilingüe (ES/EN).
 - Onboarding, guía de cámara y tour guiado de la interfaz.
-- CI: build de iOS en la nube y CI de Python.
+- CI: builds móviles Android e iOS.
 
 ---
 
 ## Próximas versiones
 
-### Bloqueos antes de publicar v1.0.2
+### Bloqueos antes de publicar v1.0.12
 
 - [ ] Probar ONVIF, RTSP y MJPEG en una matriz documentada de modelos/cámaras y
   routers; el modelo V380 Pro / AIT36106 todavía no está validado.
 - [ ] Probar instalación, actualización, permisos, alertas, reconexión y
   segundo plano en Android y iPhone físicos.
+- [ ] Compilar y validar la app Windows, captura, inferencia MoveNet y Tailscale
+  en hardware Windows.
 - [ ] Configurar firma de producción y verificar APK/AAB e IPA firmados; la
   clave de depuración no es válida para publicar.
 - [ ] Revisar licencias de libmpv, FFmpeg/codecs y demás dependencias nativas;
@@ -68,7 +68,7 @@ comunicarse directamente en la misma red.
 
 - [ ] Exportar historial de alarmas (CSV/JSON).
 - [ ] Widgets de pantalla de inicio (estado de monitoreo).
-- [ ] Soporte para más plataformas de escritorio del backend.
+- [ ] Publicar un paquete firmado de escritorio Windows.
 
 ### Backlog
 

@@ -6,13 +6,13 @@ Security model, implemented controls and operational best practices.
 
 ## 1. Principles
 
-1. **Privacy by design:** images are processed **on the device** or on **your own
-   PC**. They are not sent to external servers.
-2. **Minimal surface:** the backend exposes a small, audited REST API.
-3. **Trusted network:** the server targets a **home LAN**. Do not expose it to
-   the Internet.
-4. **Defense in depth:** authentication, rate limiting, input validation and
-   auditing.
+1. **Privacy by design:** images are processed locally on the phone or Windows
+   PC; CocinaP does not upload them to a cloud service.
+2. **Minimal surface:** the Windows host provides only authenticated camera
+   status and MJPEG endpoints.
+3. **Trusted network:** remote access is intended to pass through Tailscale
+   Serve on a private tailnet; do not expose port 8080 to the public Internet.
+4. **Authentication:** the host requires a generated API key for both endpoints.
 
 ---
 
@@ -20,98 +20,53 @@ Security model, implemented controls and operational best practices.
 
 | Asset | Threat | Mitigation |
 |---|---|---|
-| Camera video | Unauthorized access | Mandatory API key |
-| PC API | Brute force / abuse | Rate limiting + IP blocking + audit |
-| Configuration | Parameter tampering | Key allow-list + validated ranges |
-| Credentials | API key theft | SHA-256 hash on disk, constant-time compare |
-| Network | Internet exposure | LAN binding; do not publish port 8080 |
+| Camera stream | Unauthorized access | API key required for every endpoint |
+| Credentials | API key exposure | Random 256-bit key stored in secure storage |
+| Network | Internet exposure | Tailscale Serve; never publish port 8080 |
 
 Out of scope (documented): physical attacks on the device, theft of an unlocked
 phone, an already-compromised WiFi network.
 
 ---
 
-## 3. Authentication (backend)
+## 3. Windows host authentication
 
-- API key generated on first run.
-- Stored **SHA-256 hashed**; never plaintext on disk.
-- **Constant-time** comparison (prevents timing attacks).
-- Sent via the `X-API-Key` header (or `api_key` on streams).
-- Failed authentications are written to the audit log.
-
-Related code: `yolo/cocinap/security/auth.py`,
-`yolo/cocinap/security/crypto.py`.
-
----
-
-## 4. Rate limiting and blocking
-
-- Per-IP **token bucket**, separate for reads and writes.
-- When exceeded: `429` + `Retry-After`.
-- Abusive IPs can be blocked; buckets are cleaned up periodically.
-
-Code: `yolo/cocinap/security/rate_limiter.py`.
+- A cryptographically random 32-byte key is generated and stored through
+  `flutter_secure_storage`.
+- `/api/info` and `/api/stream` require the key in the `X-API-Key` header.
+- The comparison is constant-time for keys of the expected length; keys are
+  never placed in the URL.
+- The server accepts only `GET` requests to those two routes.
+- The host does not currently implement per-client rate limiting or an audit
+  log.
 
 ---
 
-## 5. Input validation
+## 4. Mobile app security
 
-- JSON body: must be an object; otherwise `400`.
-- Max body size: **1 MB** (`413` if exceeded).
-- Config keys: **allow-list** (`_CONFIG_KEYS`) with pattern `^[A-Z_]{3,40}$`.
-- `STOVE_ZONE_*` clamped to `[0, 1]`; numeric values validated by type.
-- Timer parameters limited to `[1, 240]` minutes.
-
----
-
-## 6. Headers and CORS
-
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `X-XSS-Protection: 1; mode=block`
-- `Referrer-Policy: no-referrer`
-- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
-- `Cache-Control: no-store, no-cache, must-revalidate`
-- CORS restricted (not a wildcard).
-
----
-
-## 7. Auditing
-
-Logged (code: `yolo/cocinap/security/audit.py`):
-
-- Server startup and shutdown.
-- Successful and failed authentications.
-- Rate-limit violations.
-- Configuration changes (old and new value).
-- Token register/unregister events.
-
-Queryable via `GET /api/security/audit` and `GET /api/security/status`.
-
----
-
-## 8. Mobile app security
-
-- The API key is stored in platform secure storage (Keystore or Keychain).
+- The desktop host API key is stored in platform secure storage.
 - A legacy API key from `SharedPreferences` is migrated once and then removed from ordinary preferences.
-- Connections go to the configured or mDNS-discovered URL.
+- The remote Windows client accepts only HTTPS Tailscale `.ts.net` addresses.
 - No telemetry and no image upload to the cloud.
 - FCM removed: notifications are **local** (Android in background; iOS only with
   the app open).
 
 ---
 
-## 9. Operational best practices
+## 5. Operational best practices
 
 - Do **not** publish port 8080 on the router (no port forwarding).
+- Use Tailscale Serve on the private tailnet; never use Tailscale Funnel for the
+  CocinaP API. Keep the Tailscale account and devices secured, and revoke
+  devices that should no longer connect.
 - Use a **trusted WiFi** network with WPA2/WPA3.
-- Rotate the API key if you suspect a leak (remove it from the PC and regenerate).
+- Disable remote access immediately if the host key is exposed. Host-key
+  rotation is not currently available in the Settings UI.
 - Keep the OS, Flutter and dependencies up to date.
-- Review the audit log if you notice odd behavior.
 
 ---
 
-## 10. Reporting a vulnerability
+## 6. Reporting a vulnerability
 
 Do not open a public issue. Email **kevinvilleros77@gmail.com** with:
 
@@ -125,7 +80,7 @@ repository root.
 
 ---
 
-## 11. Supported versions
+## 7. Supported versions
 
 | Version | Supported |
 |---|---|

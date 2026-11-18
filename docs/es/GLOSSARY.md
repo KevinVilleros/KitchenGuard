@@ -48,13 +48,15 @@ Términos, siglas y conceptos usados en el proyecto.
   (`_cocinap._tcp.local.`).
 - **MJPEG (Motion JPEG):** stream de video compuesto por frames JPEG
   consecutivos.
-- **Modo conectado:** la app consume el backend del PC.
-- **Modo independiente (standalone):** la app funciona sin PC.
+- **Modo de cámara remota:** el teléfono recibe el stream autenticado de Windows
+  mediante Tailscale.
+- **Modo independiente (standalone):** la app monitorea una cámara local o IP.
 
 ## P
 
 - **Provider:** patrón de gestión de estado de Flutter usado en la app.
-- **PySide6:** framework Qt para la GUI de escritorio del backend.
+- **MoveNet Lightning:** modelo de pose de una persona usado en Windows.
+- **ONNX Runtime:** runtime de inferencia del modelo en Windows.
 
 ## R
 
@@ -67,18 +69,13 @@ Términos, siglas y conceptos usados en el proyecto.
 
 - **SEMVER:** versionado semántico `MAJOR.MINOR.PATCH`.
 - **Sideloadly:** herramienta para instalar `.ipa` en iPhone sin App Store.
-- **SSD MobileNet V2:** arquitectura del modelo de detección on-device.
-- **STOVE_ZONE:** zona rectangular de la estufa dentro del encuadre.
+- **STOVE_ZONE:** configuración heredada de zona de estufa.
 
 ## T
 
-- **TFLite (TensorFlow Lite):** runtime de modelos para dispositivos móviles.
+- **TFLite (TensorFlow Lite):** runtime de modelos; no se usa en la detección
+  actual de personas.
 - **Temporizador de monitoreo:** plazo durante el cual se vigila la cocina.
-
-## Y
-
-- **YOLO (You Only Look Once):** familia de modelos de detección de objetos usada
-  en el backend del PC (`YOLO11n`).
 
 ---
 
@@ -87,7 +84,6 @@ Términos, siglas y conceptos usados en el proyecto.
 | Término en el código | Significado |
 |---|---|
 | `StandaloneProvider` | Estado del modo independiente |
-| `ServerProvider` | Estado de conexión al PC |
-| `PersonDetector` | Detector TFLite de personas |
-| `WEB_PORT` | Puerto del servidor del backend (8080) |
-| `APP_DATA` | Carpeta de datos del backend (`%APPDATA%\CocinaP`) |
+| `ServerProvider` | Estado de conexión heredada al PC |
+| `PersonDetector` | Detector de poses local específico de la plataforma |
+| `RemoteCameraServer` | Host autenticado de cámara Windows (puerto 8080) |

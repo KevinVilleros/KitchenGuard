@@ -42,7 +42,8 @@ class HomePage extends StatelessWidget {
             const SizedBox(height: 16),
             _stats(standalone),
             const SizedBox(height: 22),
-            SectionTitle(icon: Icons.flag, text: HomeTexts.objectivesTitle(lang)),
+            SectionTitle(
+                icon: Icons.flag, text: HomeTexts.objectivesTitle(lang)),
             const SizedBox(height: 12),
             _objectives(lang),
             const SizedBox(height: 22),
@@ -85,11 +86,15 @@ class HomePage extends StatelessWidget {
             children: [
               const Text(
                 "CocinaP",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
               Text(
                 HomeTexts.taglineOf(lang),
-                style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.7)),
+                style: TextStyle(
+                    fontSize: 12.5, color: Colors.white.withValues(alpha: 0.7)),
               ),
             ],
           ),
@@ -115,9 +120,8 @@ class HomePage extends StatelessWidget {
     }
 
     final String centerMain = running ? s.remainingLabel : "OK";
-    final String centerSub = running
-        ? HomeTexts.statRemaining(lang)
-        : HomeTexts.active(lang);
+    final String centerSub =
+        running ? HomeTexts.statRemaining(lang) : HomeTexts.active(lang);
 
     final statusLine = !running
         ? HomeTexts.ready(lang)
@@ -159,7 +163,8 @@ class HomePage extends StatelessWidget {
                     Text(
                       centerSub,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 10, color: Colors.white60),
+                      style:
+                          const TextStyle(fontSize: 10, color: Colors.white60),
                     ),
                   ],
                 ),
@@ -191,7 +196,9 @@ class HomePage extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     _pill(
-                      running ? HomeTexts.active(lang) : HomeTexts.inactive(lang),
+                      running
+                          ? HomeTexts.active(lang)
+                          : HomeTexts.inactive(lang),
                       running ? Colors.orange : Colors.grey,
                     ),
                     _pill(
@@ -200,7 +207,9 @@ class HomePage extends StatelessWidget {
                       icon: Icons.person,
                     ),
                     _pill(
-                      s.cameraActive ? HomeTexts.active(lang) : HomeTexts.inactive(lang),
+                      s.cameraActive
+                          ? HomeTexts.active(lang)
+                          : HomeTexts.inactive(lang),
                       s.cameraActive ? Colors.green : Colors.grey,
                       icon: Icons.videocam,
                     ),
@@ -230,7 +239,8 @@ class HomePage extends StatelessWidget {
           ],
           Text(
             text,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color),
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.bold, color: color),
           ),
         ],
       ),
@@ -245,7 +255,9 @@ class HomePage extends StatelessWidget {
             Expanded(
               child: IconStatTile(
                 icon: Icons.timer,
-                value: s.timerRunning ? s.remainingLabel : "${s.durationMinutes} min",
+                value: s.timerRunning
+                    ? s.remainingLabel
+                    : "${s.durationMinutes} min",
                 label: s.timerRunning
                     ? HomeTexts.statRemaining(AppLocal.language)
                     : HomeTexts.statTimer(AppLocal.language),
@@ -300,7 +312,11 @@ class HomePage extends StatelessWidget {
 
   Widget _howItWorks(String lang) {
     final texts = AppHowItWorks.texts(lang);
-    const icons = [Icons.person_search, Icons.timer, Icons.notifications_active];
+    const icons = [
+      Icons.person_search,
+      Icons.timer,
+      Icons.notifications_active
+    ];
     final items = <StepItem>[];
     for (var i = 0; i < texts.length; i += 2) {
       items.add(StepItem(
@@ -316,8 +332,13 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _setup(BuildContext context, String lang, StandaloneProvider s) {
-    final cameraDone = s.cameraSource == StandaloneCameraSource.phone ||
-        s.cameraUrl.isNotEmpty;
+    final cameraDone = switch (s.cameraSource) {
+      StandaloneCameraSource.phone => true,
+      StandaloneCameraSource.ipCamera => s.cameraUrl.isNotEmpty,
+      StandaloneCameraSource.remoteDesktop =>
+        s.desktopServerUrl.isNotEmpty && s.desktopApiKey.isNotEmpty,
+      StandaloneCameraSource.remoteCloud => true,
+    };
     final rows = <Widget>[
       ChecklistRow(
         icon: Icons.videocam,
@@ -414,8 +435,10 @@ class HomePage extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    _pill(lang == "en" ? "No uploads" : "Sin subidas", Colors.lightBlueAccent),
-                    _pill(lang == "en" ? "On-device AI" : "IA local", Colors.lightBlueAccent),
+                    _pill(lang == "en" ? "No uploads" : "Sin subidas",
+                        Colors.lightBlueAccent),
+                    _pill(lang == "en" ? "On-device AI" : "IA local",
+                        Colors.lightBlueAccent),
                   ],
                 ),
               ],
@@ -443,7 +466,10 @@ class HomePage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionTitle(icon: Icons.info_outline, text: HomeTexts.aboutTitle(lang), accent: Colors.white70),
+          SectionTitle(
+              icon: Icons.info_outline,
+              text: HomeTexts.aboutTitle(lang),
+              accent: Colors.white70),
           const SizedBox(height: 12),
           for (final row in rows)
             Padding(
@@ -453,7 +479,8 @@ class HomePage extends StatelessWidget {
                   Expanded(
                     child: Text(
                       row.key,
-                      style: const TextStyle(fontSize: 13, color: Colors.white60),
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.white60),
                     ),
                   ),
                   Text(

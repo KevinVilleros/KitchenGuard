@@ -1,13 +1,13 @@
 # Instalación y compilación — CocinaP
 
-Guía completa para preparar el entorno, compilar e instalar la app móvil y el
-backend del PC.
+Guía completa para preparar, compilar e instalar CocinaP en Android, iOS y
+Windows.
 
 ---
 
 ## 1. Requisitos del sistema
 
-### Para desarrollar la app móvil
+### Desarrollo Flutter
 
 | Herramienta | Versión | Notas |
 |---|---|---|
@@ -16,20 +16,17 @@ backend del PC.
 | Android SDK | API 26+ | Con `platform-tools` (adb) |
 | Java JDK | 17 o 21 | Para Gradle/Android |
 | Xcode | 16+ | Solo macOS, para iOS local |
+| Visual Studio | 2022 | Windows: carga **Desarrollo para el escritorio con C++** |
+| Modo de desarrollador de Windows | Activado | Requerido para enlaces simbólicos de plugins |
 | Git | 2.x | Control de versiones |
-
-### Para ejecutar el backend del PC
-
-| Herramienta | Versión | Notas |
-|---|---|---|
-| Python | 3.10+ | Con `pip` |
-| Windows | 10 u 11 | Para la GUI PySide6 |
 
 ### Dispositivos
 
 - **Android:** 8.0+ (API 26+), con depuración USB activada.
 - **iOS:** 17.0+.
-- **Red:** WiFi en la misma subred que el PC (solo modo conectado).
+- **Windows:** 10 u 11.
+- **Red:** misma LAN que la cámara IP para buscarla; Tailscale en móvil y PC
+  Windows para video remoto.
 
 ---
 
@@ -123,48 +120,59 @@ flutter build ipa --release --export-method ad-hoc
 
 ---
 
-## 4. Backend del PC — instalar y ejecutar
+## 4. App de escritorio Windows — compilar y ejecutar
 
-> El backend está archivado en `yolo/`. Es opcional y solo aporta detección de
-> fuego/humo y el servidor para el modo conectado.
+La app de Windows es la misma aplicación Flutter que la app móvil. Usa MoveNet
+Lightning mediante ONNX Runtime para detectar personas localmente.
 
-### 4.1 Crear entorno virtual e instalar dependencias
+### 4.1 Requisitos
 
-```powershell
-cd yolo
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
+- Windows 10 u 11.
+- Flutter stable con soporte de escritorio Windows habilitado.
+- Visual Studio 2022 con la carga de trabajo **Desarrollo para el escritorio
+  con C++** y sus componentes predeterminados.
+- Modo de desarrollador de Windows activado para que Flutter pueda crear los
+  enlaces simbólicos de plugins.
 
-### 4.2 Ejecutar
+Comprueba la instalación con `flutter doctor -v`.
 
-```powershell
-python main.py
-```
-
-La GUI de escritorio abre con las pestañas **Cámara**, **Config** y **Alarmas**.
-Al iniciar, el servidor HTTP escucha en el puerto **8080** y muestra las IPs
-locales y la **API key** (generada la primera vez).
-
-### 4.3 Empaquetar un ejecutable
+### 4.2 Ejecutar o compilar
 
 ```powershell
-python build_app.py        # genera el .exe con PyInstaller
-python build_all.py        # build completo (app + instalador)
+cd cocinap_mobile
+flutter pub get
+flutter run -d windows
+# O crea una versión release:
+flutter build windows --release
 ```
+
+El ejecutable y sus archivos de runtime quedan en
+`cocinap_mobile/build/windows/runner/Release/`. La captura de la webcam está
+limitada a aproximadamente un fotograma por segundo; la detección Windows usa
+una pose MoveNet y no es idéntica a ML Kit móvil.
 
 ---
 
-## 5. Conectar la app móvil al PC
+## 5. Video remoto de escritorio (opcional)
 
-1. Asegura que el móvil y el PC estén en la **misma red WiFi**.
-2. En el PC, abre CocinaP y localiza la **API key** (menú de conexión o consola).
-3. En la app móvil, ve a la pestaña **Conectar** y elige un método:
-   - **Buscar en la red** (mDNS): encuentra el PC automáticamente.
-   - **Escanear QR del PC**: en el PC, pulsa "Mostrar código QR".
-   - **Conectar manualmente**: introduce `http://IP:8080` y la API key.
-4. Pulsa conectar. El estado debe pasar a **Conectado**.
+La fuente de escritorio remoto de la app usa una red privada Tailscale; no usa
+el flujo antiguo de conexión de servidores por mDNS/QR.
+
+1. Instala Tailscale en el PC Windows y el teléfono e inicia sesión en la misma
+   red privada.
+2. Abre CocinaP en Windows, selecciona la cámara y activa **Permitir acceso
+   remoto** en Ajustes. Mantén la app abierta y el monitoreo activo.
+3. En PowerShell del PC ejecuta `tailscale serve --bg 8080`. Usa
+   `tailscale serve status` para encontrar la dirección HTTPS terminada en
+   `.ts.net`.
+4. Copia la clave API que se muestra en Ajustes de Windows. En **Ajustes** del
+   móvil, elige la fuente de cámara del PC remoto, ingresa la dirección HTTPS y
+   la clave, y prueba la conexión.
+
+No expongas el puerto 8080 mediante el router ni uses Tailscale Funnel. El PC
+debe permanecer encendido, conectado a Tailscale y con CocinaP ejecutándose.
+El móvil ejecuta su propio detector de personas mientras la app está abierta;
+las alarmas del escritorio no se sincronizan con el teléfono.
 
 Ver [Manual de usuario](USER_GUIDE.md) para el uso diario.
 
@@ -177,7 +185,6 @@ El repositorio incluye workflows en `.github/workflows/`:
 | Workflow | Disparador | Resultado |
 |---|---|---|
 | `ios.yml` ("iOS Build CocinaP") | push a `main` con cambios en `cocinap_mobile/**` o manual | `.ipa` sin firmar (artefacto `CocinaP-iOS`) |
-| `python-ci.yml` | cambios en `yolo/**` | lint + tests del backend |
 
 Ver [Pruebas y CI/CD](TESTING.md).
 
@@ -191,6 +198,7 @@ Ver [Pruebas y CI/CD](TESTING.md).
 | Gradle falla por Java | JDK incompatible | Usa JDK 17/21 y exporta `JAVA_HOME` |
 | `adb` no encuentra el dispositivo | Depuración USB apagada | Actívala y acepta el diálogo |
 | Build iOS falla | Falta de firma | Usa el `.ipa` sin firmar con Sideloadly |
-| `pip install` falla | Sin compiladores | Instala Build Tools de Visual Studio |
+| Build Windows informa que faltan enlaces simbólicos | Modo de desarrollador desactivado | Actívalo y vuelve a ejecutar `flutter pub get` |
+| Build Windows no encuentra herramientas C++ | Falta la carga de trabajo de Visual Studio | Instala Visual Studio 2022 con **Desarrollo para el escritorio con C++** |
 
 Más casos en [Solución de problemas](TROUBLESHOOTING.md).

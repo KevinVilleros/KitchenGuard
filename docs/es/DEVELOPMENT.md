@@ -19,16 +19,6 @@ flutter analyze
 flutter run
 ```
 
-### Backend (Python)
-
-```powershell
-cd yolo
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python main.py
-```
-
 ---
 
 ## 2. Estructura del repositorio
@@ -41,17 +31,13 @@ KitchenGuard/
 │   │   ├── content/           # Textos bilingües ES/EN
 │   │   ├── pages/             # Pantallas
 │   │   ├── providers/         # Estado (ChangeNotifier)
-│   │   ├── services/          # HTTP, mDNS, MJPEG, TFLite, prefs
+│   │   ├── services/          # HTTP, ONVIF, MJPEG, ML Kit/MoveNet, prefs
 │   │   └── widgets/           # Componentes reutilizables
-│   ├── android/  ios/         # Configuración de plataforma
-│   ├── assets/models/         # Modelo TFLite
+│   ├── android/ ios/ windows/ # Runners de plataforma
+│   ├── assets/models/         # Modelo MoveNet ONNX y avisos
 │   └── test/                  # Pruebas de widgets
-├── yolo/                      # Backend Python/YOLO (archivado)
-│   ├── cocinap/               # Paquete Python
-│   ├── tests/                 # Pruebas pytest
-│   └── docs/                  # Docs del backend
 ├── docs/                      # Documentación general (es/ y en/)
-├── .github/workflows/         # CI: ios.yml, python-ci.yml
+├── .github/workflows/         # CI: builds móviles y CodeQL
 ├── .editorconfig              # Estilo de código
 ├── CHANGELOG.md
 └── LICENSE
@@ -79,7 +65,7 @@ KitchenGuard/
 | `services/api_service.dart` | Cliente HTTP REST |
 | `services/discovery_service.dart` | Descubrimiento mDNS |
 | `services/mjpeg_service.dart` | Parser MJPEG |
-| `services/person_detector.dart` | Inferencia TFLite |
+| `services/person_detector.dart` | ML Kit móvil, MoveNet en Windows |
 | `services/background_service.dart` | Servicio en segundo plano |
 | `services/settings_service.dart` | Persistencia |
 | `widgets/graphical.dart` | Anillos, tarjetas y timeline |
@@ -100,13 +86,6 @@ KitchenGuard/
 - **Idioma de la UI:** usa `content.dart` para todos los textos (sin literales).
 - **Sin emojis** en la UI ni en el código.
 - Antes de commit: `flutter analyze` debe quedar limpio.
-
-### Python
-
-- Sigue `ruff` (config en `pyproject.toml`).
-- Estilo PEP 8, indentación de 4 espacios.
-- Sin emojis.
-- `ruff check yolo/` y `ruff format yolo/`.
 
 ### Transversal (`.editorconfig`)
 
@@ -141,18 +120,10 @@ flutter test               # pruebas
 flutter run                # ejecutar en dispositivo
 flutter build apk --release
 flutter build ipa --release
+flutter run -d windows
+flutter build windows --release
 flutter devices            # dispositivos conectados
 dart format .              # formateo
-```
-
-### Python (backend)
-
-```bash
-python main.py             # ejecutar la app de escritorio
-ruff check yolo/           # lint
-ruff format yolo/          # formato
-pytest yolo/tests          # pruebas
-python build_app.py        # empaquetar .exe
 ```
 
 ---

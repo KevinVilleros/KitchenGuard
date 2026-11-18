@@ -1,30 +1,28 @@
-# ADR 0005 — Archivar el backend YOLO en `yolo/`
+# ADR 0005 — Retirar el backend de escritorio Python archivado
 
 ## Estado
-Aceptada
+Aceptada; sustituye la decisión anterior de conservar el backend archivado.
 
 ## Contexto
 
-Tras adoptar la app Flutter como tecnología principal (ADR 0001), el backend
-Python ocupaba la raíz del repositorio (`cocinap/`, `tests/`, `installer/`,
-`scripts/`, `main.py`, builds, `models/`, docs), mezclándose con el producto
-activo y dificultando la navegación.
+La decisión anterior archivó la aplicación de escritorio Python/YOLO en
+`yolo/`. El producto ahora requiere una implementación Flutter para móvil y
+Windows, con MoveNet en Windows y un stream de cámara autenticado por Tailscale.
 
 ## Decisión
 
-Reorganizar el backend Python/YOLO bajo la carpeta **`yolo/`**, preservando el
-historial de git (usando `git mv` para que git lo detecte como renombrado), y
-reescribir el `README.md` raíz con enfoque Flutter-first.
+Eliminar la implementación Python/YOLO archivada y usar el target Flutter
+Windows para el monitoreo de escritorio y el video remoto.
 
 ## Consecuencias
 
 **Positivas**
-- Raíz limpia y centrada en la app móvil.
-- Separación clara entre producto activo y backend archivado.
-- El CI de Python apunta a `working-directory: yolo`.
+- Una aplicación Flutter y un flujo de detección para móvil y Windows.
+- No hace falta mantener un runtime o instalador de escritorio Python separado.
 
 **Negativas**
-- Hay que actualizar rutas en scripts y documentación.
+- Los builds Windows requieren herramientas Flutter desktop y compiladores C++.
 
 **Neutrales**
-- El backend sigue siendo funcional y opcional.
+- Windows usa MoveNet Lightning y no ofrece las funciones anteriores de
+  detección de fuego/humo.

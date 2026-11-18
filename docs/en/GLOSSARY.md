@@ -45,13 +45,15 @@ Terms, acronyms and concepts used in the project.
 - **mDNS (multicast DNS):** local network service discovery
   (`_cocinap._tcp.local.`).
 - **MJPEG (Motion JPEG):** video stream made of consecutive JPEG frames.
-- **Connected mode:** the app consumes the PC backend.
-- **Standalone mode:** the app works without a PC.
+- **Remote camera mode:** a phone receives the authenticated Windows camera
+  stream over Tailscale.
+- **Standalone mode:** the app monitors a local device or IP camera.
 
 ## P
 
 - **Provider:** Flutter state-management pattern used in the app.
-- **PySide6:** Qt framework for the backend desktop GUI.
+- **MoveNet Lightning:** single-person pose model used on Windows.
+- **ONNX Runtime:** model inference runtime used by the Windows target.
 
 ## R
 
@@ -63,18 +65,14 @@ Terms, acronyms and concepts used in the project.
 
 - **SEMVER:** semantic versioning `MAJOR.MINOR.PATCH`.
 - **Sideloadly:** tool to install an `.ipa` on iPhone without the App Store.
-- **SSD MobileNet V2:** architecture of the on-device detection model.
-- **STOVE_ZONE:** rectangular stove area within the frame.
+- **Tailscale Serve:** private HTTPS proxy from a tailnet to the Windows host.
+- **STOVE_ZONE:** legacy stove-zone configuration.
 
 ## T
 
-- **TFLite (TensorFlow Lite):** model runtime for mobile devices.
+- **TFLite (TensorFlow Lite):** a model runtime; it is not used by current
+  person detection.
 - **Monitoring timer:** the window during which the kitchen is watched.
-
-## Y
-
-- **YOLO (You Only Look Once):** family of object detection models used by the PC
-  backend (`YOLO11n`).
 
 ---
 
@@ -84,6 +82,5 @@ Terms, acronyms and concepts used in the project.
 |---|---|
 | `StandaloneProvider` | Standalone mode state |
 | `ServerProvider` | PC connection state |
-| `PersonDetector` | TFLite person detector |
-| `WEB_PORT` | Backend server port (8080) |
-| `APP_DATA` | Backend data folder (`%APPDATA%\CocinaP`) |
+| `PersonDetector` | Platform-specific on-device pose detector |
+| `RemoteCameraServer` | Authenticated Windows camera host (port 8080) |

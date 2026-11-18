@@ -74,7 +74,8 @@ void main() {
       expect(await settings.getHasSeenAppTour(), isTrue);
     });
 
-    test('legacy install guide completion migrates the onboarding state', () async {
+    test('legacy install guide completion migrates the onboarding state',
+        () async {
       SharedPreferences.setMockInitialValues({
         'has_seen_install_guide': true,
       });
@@ -103,7 +104,8 @@ void main() {
       expect(provider.personPresent, isTrue);
     });
 
-    test('requires consecutive absent frames and clears when person returns', () {
+    test('requires consecutive absent frames and clears when person returns',
+        () {
       final provider = StandaloneProvider();
       provider.onPersonDetected(1, score: 0.9);
       provider.onPersonDetected(1, score: 0.9);
@@ -119,6 +121,67 @@ void main() {
       provider.onPersonDetected(1, score: 0.9);
       provider.onPersonDetected(1, score: 0.9);
       expect(provider.personPresent, isTrue);
+    });
+
+    test('restores background detection and does not duplicate its alert', () {
+      final provider = StandaloneProvider()..startTimer(minutes: 30);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final state = {
+        'lastPersonSeenMillis': now,
+        'personPresent': false,
+        'consecutivePresentFrames': 0,
+        'consecutiveAbsentFrames': 3,
+        'firedIntervals': [10],
+        'lastAlertMillis': now,
+        'lastAlertInterval': 10,
+        'lastAlertMessage': 'Cocina desatendida',
+      };
+
+      void restore() => provider.syncBackgroundDetection(
+            lastPersonSeenMillis: state['lastPersonSeenMillis']! as int,
+            personPresent: state['personPresent']! as bool,
+            consecutivePresentFrames: state['consecutivePresentFrames']! as int,
+            consecutiveAbsentFrames: state['consecutiveAbsentFrames']! as int,
+            firedIntervals: state['firedIntervals']! as List<int>,
+            lastAlertMillis: state['lastAlertMillis']! as int,
+            lastAlertInterval: state['lastAlertInterval']! as int,
+            lastAlertMessage: state['lastAlertMessage']! as String,
+          );
+
+      restore();
+      restore();
+
+      expect(provider.personPresent, isFalse);
+      expect(provider.alerts, hasLength(1));
+      provider.stopTimer();
+    });
+
+    test('remote monitoring snapshots keep their alert idempotent', () {
+      final provider = StandaloneProvider();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      void sync() => provider.syncRemoteMonitoring(
+            personPresent: false,
+            timerRunning: true,
+            timerPaused: true,
+            durationMinutes: 45,
+            remainingSeconds: 45 * 60,
+            lastPersonSeenMillis: now - 60 * 1000,
+            firedIntervals: const [1],
+            lastAlertMillis: now,
+            lastAlertInterval: 1,
+            lastAlertMessage: 'Cocina desatendida',
+          );
+
+      sync();
+      sync();
+
+      expect(provider.cameraActive, isTrue);
+      expect(provider.timerRunning, isTrue);
+      expect(provider.timerPaused, isTrue);
+      expect(provider.durationMinutes, 45);
+      expect(provider.remainingSeconds, 45 * 60);
+      expect(provider.personPresent, isFalse);
+      expect(provider.alerts, hasLength(1));
     });
 
     test('monitor interval and frame counters remain bounded by state', () {

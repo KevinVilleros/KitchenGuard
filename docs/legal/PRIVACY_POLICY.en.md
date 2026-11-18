@@ -6,7 +6,9 @@
 
 ## 1. Introduction
 
-CocinaP ("we", "the app", "the Service") is a smart kitchen safety application that helps detect fire, smoke, and the presence of people, and to prevent risk situations while cooking.
+CocinaP ("we", "the app", "the Service") is a kitchen-monitoring application
+that detects people in the camera view and alerts when the kitchen appears
+unattended. It does not detect fire or smoke.
 
 This Privacy Policy explains what data we process, how we use it, and what rights you have as a user.
 
@@ -22,9 +24,16 @@ This Privacy Policy explains what data we process, how we use it, and what right
 
 ## 2. Core principle: local processing on your device
 
-The design of CocinaP prioritizes your privacy. **Camera images are processed directly on your device** (on your phone or on the computer where the system is installed).
+The design of CocinaP prioritizes your privacy. In local mode, camera images
+are processed directly on your phone or Windows PC running CocinaP.
 
-**We do not send images to CocinaP servers or provide cloud video storage.** If you connect PC mode, the stream is received from your own computer over the configured network. If you connect an IP camera, video is requested directly from that camera; mobile person detection is local.
+**CocinaP does not provide its own cloud video storage or receive your video on
+CocinaP-operated servers.** If you configure remote Windows video, the stream
+travels from your PC to your phone over your private Tailscale network using
+HTTPS. Tailscale may relay encrypted network traffic; refer to Tailscale's
+privacy information for details about its network metadata and services. The
+mobile app requests an IP camera directly; person detection runs locally on the
+phone or Windows PC.
 
 You can review this technical implementation in the manual and project architecture (see `docs/ARCHITECTURE.md`).
 
@@ -36,7 +45,9 @@ The app may request the following permissions and process the following data, on
 
 ### 3.1 Camera permission
 - **Purpose:** capture live video of the kitchen to analyze risk sources and the presence of people.
-- **Note:** recording is local. Analyzed images are not uploaded to external servers unless you configure synchronization or notification services that require it (see Section 4).
+- **Note:** CocinaP does not record or upload camera video to its own servers.
+  When remote desktop video is enabled, video is transmitted between your PC
+  and phone over Tailscale (see Section 5).
 
 ### 3.2 Storage permission
 - **Purpose:** store app configuration (preferences, camera URLs, detection settings) locally on your device.
@@ -49,14 +60,21 @@ The app may request the following permissions and process the following data, on
 - The preferences you enter (e.g., monitoring duration, alert time, detection confidence, IP camera settings) are stored **locally** on your device.
 
 ### 3.5 Use of third-party cameras (IP cameras)
-- The app can discover ONVIF cameras advertising on your local network or connect to an RTSP/HTTP-MJPEG stream URL that you configure. ONVIF credentials are used to request the stream on the local network; the stream URL, including credentials when applicable, is stored in the device's secure storage. Video is analyzed locally.
+- The app can discover ONVIF cameras advertising on your local network or
+  connect to an RTSP/HTTP-MJPEG stream URL that you configure. ONVIF
+  credentials are used to request the stream on the local network; the stream
+  URL, including credentials when applicable, is stored in the device's secure
+  storage. Video is analyzed locally.
 - **User responsibility:** you are responsible for being authorized to connect to those cameras and for complying with applicable privacy and video-surveillance laws in your jurisdiction (e.g., informing people who may be captured, and not placing cameras in areas with a high expectation of privacy, such as bathrooms or bedrooms).
 
 ---
 
 ## 4. Person detection and images
 
-The app uses artificial-intelligence/computer-vision models (e.g., a TFLite person-detection model) to determine whether a person is present in the camera's field of view, in order to alert you if the kitchen is left unattended.
+The app uses on-device computer-vision models to determine whether a person is
+present in the camera's field of view: ML Kit Pose Detection on Android/iOS and
+MoveNet Lightning through ONNX Runtime on Windows. The purpose is to alert you
+if the kitchen is left unattended.
 
 - **Local processing:** the model runs on the device. Records of when a person is or is not detected are not stored or transmitted, except for the local alert history.
 - **No profiling:** we do not use detection to build behavioral profiles, biometric identification, or individual tracking.
@@ -68,7 +86,11 @@ The app uses artificial-intelligence/computer-vision models (e.g., a TFLite pers
 
 **We do not sell or rent** your personal data.
 
-The app does not transmit your configuration or analyzed images to CocinaP servers **unless you configure features that require explicit connectivity** (for example, connecting to the CocinaP server/companion that you install and control yourself).
+The app does not transmit your configuration or analyzed images to CocinaP
+servers. If you configure remote Windows video, the mobile app receives the selected
+camera stream over your Tailscale network. The mobile app stores the Windows
+address and host API key in the phone's secure storage; CocinaP Windows stores
+its host key in Windows secure storage.
 
 ### About push notifications (additional information)
 The current version uses local notifications and does not integrate remote push notifications. Notification behavior depends on the platform and permissions granted.

@@ -17,6 +17,22 @@ void main() {
     );
   });
 
+  test('RTSP candidates reuse the discovered IP and common stream paths', () {
+    final candidates = buildRtspCandidateUris('192.168.1.46');
+
+    expect(candidates, hasLength(6));
+    expect(candidates.first, Uri.parse('rtsp://192.168.1.46:554/stream1'));
+    expect(candidates[1], Uri.parse('rtsp://192.168.1.46:554/stream2'));
+    expect(
+      candidates[4],
+      Uri.parse(
+        'rtsp://192.168.1.46:554/cam/realmonitor?channel=1&subtype=0',
+      ),
+    );
+    expect(candidates.every((candidate) => candidate.host == '192.168.1.46'),
+        isTrue);
+  });
+
   testWidgets('Canceling the camera URL dialog closes cleanly',
       (WidgetTester tester) async {
     await tester.pumpWidget(

@@ -13,8 +13,13 @@ import '../providers/standalone_provider.dart';
 import '../services/person_detector.dart';
 import '../services/background_service.dart';
 import '../services/mjpeg_frame_parser.dart';
+import '../services/remote_desktop_service.dart';
+import '../services/remote_cloud_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/camera_url_dialog.dart';
+import '../widgets/remote_desktop_dialog.dart';
+import '../widgets/remote_cloud_camera_view.dart';
+import '../widgets/remote_cloud_pairing_dialog.dart';
 import '../content/content.dart';
 
 @visibleForTesting
@@ -80,10 +85,12 @@ class _StandalonePageState extends State<StandalonePage>
   Player? _rtspPlayer;
   VideoController? _rtspController;
   Timer? _rtspFrameTimer;
+  Timer? _windowsSnapshotTimer;
   Timer? _cameraHealthTimer;
   Timer? _cameraRetryTimer;
   Timer? _rtspConnectTimeout;
   bool _rtspScreenshotInFlight = false;
+  bool _windowsSnapshotInFlight = false;
   bool _rtspVideoReady = false;
   bool _rtspPositionAdvanced = false;
   bool _cameraRestarting = false;
@@ -96,6 +103,10 @@ class _StandalonePageState extends State<StandalonePage>
   DateTime? _ipLastFrameAt;
   String? _cameraRetryMessage;
   bool _wasBackgrounded = false;
+  RemoteCloudCredentials? _remoteCloudCredentials;
+  final _remoteCloudCameraKey = GlobalKey<RemoteCloudCameraViewState>();
+  int _lastRemoteStateUpdatedAt = 0;
+  Future<void>? _cameraBackgroundTransition;
   bool _lastTimerRunning = false;
   bool _lastTimerPaused = false;
   bool _cameraError = false;
@@ -104,6 +115,8 @@ class _StandalonePageState extends State<StandalonePage>
   Uint8List? _lastIpFrame;
   StandaloneCameraSource _lastSource = StandaloneCameraSource.phone;
   String _lastUrl = "";
+  String _lastDesktopUrl = "";
+  String _lastDesktopApiKey = "";
 
   // Último resultado de detección para el overlay gráfico de depuración.
   DetectionResult _lastResult = DetectionResult.empty;
@@ -130,6 +143,8 @@ class _StandalonePageState extends State<StandalonePage>
     final standalone = context.read<StandaloneProvider>();
     _lastSource = standalone.cameraSource;
     _lastUrl = standalone.cameraUrl;
+    _lastDesktopUrl = standalone.desktopServerUrl;
+    _lastDesktopApiKey = standalone.desktopApiKey;
     _lastTimerRunning = standalone.timerRunning;
     _lastTimerPaused = standalone.timerPaused;
     standalone.restoreSession();
@@ -140,10 +155,15 @@ class _StandalonePageState extends State<StandalonePage>
   void _onProviderChanged() {
     final standalone = context.read<StandaloneProvider>();
     if (standalone.cameraSource != _lastSource ||
-        standalone.cameraUrl != _lastUrl) {
+        standalone.cameraUrl != _lastUrl ||
+        standalone.desktopServerUrl != _lastDesktopUrl ||
+        standalone.desktopApiKey != _lastDesktopApiKey) {
       _lastSource = standalone.cameraSource;
       _lastUrl = standalone.cameraUrl;
+      _lastDesktopUrl = standalone.desktopServerUrl;
+      _lastDesktopApiKey = standalone.desktopApiKey;
       _initVideo();
+      _syncMonitoring(standalone);
     }
     if (standalone.timerRunning != _lastTimerRunning ||
         standalone.timerPaused != _lastTimerPaused) {
@@ -162,17 +182,83 @@ class _StandalonePageState extends State<StandalonePage>
       ));
       if (_wasBackgrounded) {
         _wasBackgrounded = false;
-        if (context.read<StandaloneProvider>().cameraSource ==
-            StandaloneCameraSource.ipCamera) {
-          _initVideo();
-        }
+        unawaited(_resumeCameraAfterBackground());
       }
-    } else if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden ||
+    } else if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       _wasBackgrounded = true;
       unawaited(_setScreenAwake(false));
+      final standalone = context.read<StandaloneProvider>();
+      if (defaultTargetPlatform == TargetPlatform.android &&
+          standalone.cameraSource == StandaloneCameraSource.phone &&
+          standalone.timerRunning &&
+          !standalone.timerPaused) {
+        unawaited(_moveCameraToBackgroundService());
+      }
     }
+  }
+
+  Future<void> _moveCameraToBackgroundService() {
+    final inFlight = _cameraBackgroundTransition;
+    if (inFlight != null) return inFlight;
+
+    late final Future<void> transition;
+    transition = _moveCameraToBackgroundServiceImpl().whenComplete(() {
+      if (identical(_cameraBackgroundTransition, transition)) {
+        _cameraBackgroundTransition = null;
+      }
+    });
+    _cameraBackgroundTransition = transition;
+    return transition;
+  }
+
+  Future<void> _moveCameraToBackgroundServiceImpl() async {
+    await _stopVideo();
+    if (!mounted || !_wasBackgrounded) return;
+    try {
+      await BackgroundServiceManager.setCameraActive(true);
+    } catch (error) {
+      debugPrint(
+        'Could not move camera to Android foreground service: '
+        '${error.runtimeType}',
+      );
+    }
+  }
+
+  Future<void> _resumeCameraAfterBackground() async {
+    final transition = _cameraBackgroundTransition;
+    if (transition != null) await transition;
+    if (!mounted) return;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final provider = context.read<StandaloneProvider>();
+        final state = await BackgroundServiceManager.getMonitoringState();
+        final lastPersonSeenMillis = state?['lastPersonSeenMillis'];
+        if (state != null && lastPersonSeenMillis is int) {
+          final intervals = state['firedIntervals'];
+          provider.syncBackgroundDetection(
+            lastPersonSeenMillis: lastPersonSeenMillis,
+            personPresent: state['personPresent'] == true,
+            consecutivePresentFrames:
+                state['consecutivePresentFrames'] as int? ?? 0,
+            consecutiveAbsentFrames:
+                state['consecutiveAbsentFrames'] as int? ?? 0,
+            firedIntervals: intervals is List
+                ? intervals.whereType<int>().toList()
+                : const [],
+            lastAlertMillis: state['lastAlertMillis'] as int?,
+            lastAlertInterval: state['lastAlertInterval'] as int?,
+            lastAlertMessage: state['lastAlertMessage'] as String?,
+          );
+        }
+        await BackgroundServiceManager.setCameraActive(false);
+      } catch (error) {
+        debugPrint(
+          'Could not release background camera: ${error.runtimeType}',
+        );
+      }
+    }
+    if (mounted) await _initVideo();
   }
 
   void _syncMonitoring(StandaloneProvider standalone) {
@@ -182,8 +268,8 @@ class _StandalonePageState extends State<StandalonePage>
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
     ));
     if (defaultTargetPlatform == TargetPlatform.android) {
-      if (active) {
-        unawaited(_startBackgroundMonitoring(standalone.remainingSeconds));
+      if (active && standalone.cameraSource == StandaloneCameraSource.phone) {
+        unawaited(_startBackgroundMonitoring(standalone));
       } else {
         unawaited(_stopBackgroundMonitoring());
       }
@@ -198,12 +284,32 @@ class _StandalonePageState extends State<StandalonePage>
     }
   }
 
-  Future<void> _startBackgroundMonitoring(int remainingSeconds) async {
+  Future<void> _startBackgroundMonitoring(
+    StandaloneProvider standalone,
+  ) async {
     try {
-      await BackgroundServiceManager.startMonitoring(remainingSeconds);
+      await BackgroundServiceManager.startMonitoring(
+        remainingSeconds: standalone.remainingSeconds,
+        confidence: standalone.confidence,
+        noPersonAlertSeconds: standalone.noPersonAlertSeconds,
+        alertIntervals: standalone.intervalAlertsEnabled
+            ? standalone.sortedIntervals
+            : const [],
+        intervalAlertsEnabled: standalone.intervalAlertsEnabled,
+        repeatLastInterval: standalone.repeatMode == AlertRepeatMode.repeatLast,
+      );
     } catch (error) {
       debugPrint(
           'Could not start Android monitoring service: ${error.runtimeType}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(lang == 'en'
+                ? 'Could not enable Android background monitoring. Check camera and notification permissions.'
+                : 'No se pudo activar el monitoreo en segundo plano. Verifica los permisos de cámara y notificaciones.'),
+          ),
+        );
+      }
     }
   }
 
@@ -229,6 +335,7 @@ class _StandalonePageState extends State<StandalonePage>
   Future<void> _initVideo({bool resetRetry = true}) async {
     if (!mounted) return;
     final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
     final source = standalone.cameraSource;
     _cameraErrorMessage = null;
     _cameraRetryMessage = null;
@@ -237,17 +344,31 @@ class _StandalonePageState extends State<StandalonePage>
     if (resetRetry) _cameraRetryAttempt = 0;
     _lastSource = source;
     _lastUrl = standalone.cameraUrl;
+    _lastDesktopUrl = standalone.desktopServerUrl;
+    _lastDesktopApiKey = standalone.desktopApiKey;
 
-    _stopVideo();
+    await _stopVideo();
+    standalone.setLatestCameraJpeg(null);
     final generation = _cameraGeneration;
     standalone.setCameraActive(false);
 
-    if (source == StandaloneCameraSource.ipCamera) {
-      final url = standalone.cameraUrl;
+    if (source == StandaloneCameraSource.ipCamera ||
+        source == StandaloneCameraSource.remoteDesktop) {
+      final remoteDesktop = source == StandaloneCameraSource.remoteDesktop;
+      final url = remoteDesktop
+          ? (RemoteDesktopService.tryBuildStreamUri(
+                standalone.desktopServerUrl,
+              )?.toString() ??
+              '')
+          : standalone.cameraUrl;
       if (url.isEmpty) {
         setState(() {
           _cameraError = true;
-          _cameraErrorMessage = null;
+          _cameraErrorMessage = remoteDesktop
+              ? (lang == 'en'
+                  ? 'Configure the remote CocinaP Desktop connection first.'
+                  : 'Primero configura la conexión a CocinaP Escritorio remoto.')
+              : null;
         });
         return;
       }
@@ -258,19 +379,49 @@ class _StandalonePageState extends State<StandalonePage>
       if (url.toLowerCase().startsWith('rtsp://')) {
         await _startRtspStream(url);
       } else {
-        unawaited(_startIpStream(url));
+        unawaited(_startIpStream(
+          url,
+          apiKey: remoteDesktop ? standalone.desktopApiKey : null,
+        ));
       }
+      return;
+    }
+
+    if (source == StandaloneCameraSource.remoteCloud) {
+      final credentials = await settings.getRemoteCloudCredentials();
+      if (!mounted || generation != _cameraGeneration) return;
+      if (credentials == null || credentials.ownerKey.isNotEmpty) {
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = lang == 'en'
+              ? 'Pair this phone with CocinaP on the home PC first.'
+              : 'Primero vincula este teléfono con CocinaP en la PC de casa.';
+          _remoteCloudCredentials = null;
+        });
+        return;
+      }
+      setState(() {
+        _cameraError = false;
+        _cameraErrorMessage = null;
+        _remoteCloudCredentials = credentials;
+        _lastRemoteStateUpdatedAt = 0;
+      });
       return;
     }
 
     // Fuente: cámara del móvil.
     try {
       final cameras = await availableCameras();
-      if (!mounted || cameras.isEmpty) {
+      if (!mounted || generation != _cameraGeneration) return;
+      if (cameras.isEmpty) {
         setState(() {
           _cameraError = true;
           _cameraErrorMessage = null;
         });
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          _scheduleCameraReconnect(generation);
+        }
+
         return;
       }
       late CameraDescription back;
@@ -281,13 +432,17 @@ class _StandalonePageState extends State<StandalonePage>
         back = cameras.first;
       }
       final controller = await _createController(back);
-      if (!mounted || generation != _cameraGeneration || controller == null) {
+      if (!mounted || generation != _cameraGeneration) {
         await controller?.dispose();
-        if (mounted) {
-          setState(() {
-            _cameraError = true;
-            _cameraErrorMessage = null;
-          });
+        return;
+      }
+      if (controller == null) {
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = null;
+        });
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          _scheduleCameraReconnect(generation);
         }
         return;
       }
@@ -299,7 +454,11 @@ class _StandalonePageState extends State<StandalonePage>
         _camera = controller;
       });
       standalone.setCameraActive(true);
-      _startPhoneStream();
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        _startWindowsCameraSnapshots(controller, generation);
+      } else {
+        _startPhoneStream();
+      }
     } catch (e) {
       debugPrint('Camera init error: $e');
       if (mounted) {
@@ -315,9 +474,60 @@ class _StandalonePageState extends State<StandalonePage>
   /// una que el dispositivo soporte. La cámara del móvil es el punto más
   /// frágil: distintas resoluciones y formatos pueden fallar con
   /// "No supported surface combination".
+  void _onRemoteMonitoringState(Map<String, dynamic> state) {
+    final updatedAt = state['updatedAt'];
+    final personPresent = state['personPresent'];
+    final timerRunning = state['timerRunning'];
+    final timerPaused = state['timerPaused'];
+    final durationMinutes = state['durationMinutes'];
+    final remainingSeconds = state['remainingSeconds'];
+    if (updatedAt is! int ||
+        updatedAt <= _lastRemoteStateUpdatedAt ||
+        personPresent is! bool ||
+        timerRunning is! bool ||
+        (timerPaused != null && timerPaused is! bool) ||
+        (durationMinutes != null && durationMinutes is! int) ||
+        remainingSeconds is! int) {
+      return;
+    }
+    _lastRemoteStateUpdatedAt = updatedAt;
+    final fired = state['firedIntervals'];
+    final provider = context.read<StandaloneProvider>();
+    final alertMillis = state['lastAlertMillis'] as int?;
+    final alertMessage = state['lastAlertMessage'] as String?;
+    final shouldNotify = alertMillis != null &&
+        alertMillis != provider.lastAlertAt?.millisecondsSinceEpoch;
+    provider.syncRemoteMonitoring(
+      personPresent: personPresent,
+      timerRunning: timerRunning,
+      remainingSeconds: remainingSeconds,
+      timerPaused: timerPaused == true,
+      durationMinutes: durationMinutes as int?,
+      lastPersonSeenMillis: state['lastPersonSeenMillis'] as int?,
+      firedIntervals: fired is List ? fired.whereType<int>().toList() : [],
+      lastAlertMillis: alertMillis,
+      lastAlertInterval: state['lastAlertInterval'] as int?,
+      lastAlertMessage: alertMessage,
+    );
+    if (shouldNotify && alertMessage != null) {
+      unawaited(_showRemoteAlarm(alertMessage));
+    }
+  }
+
+  Future<void> _showRemoteAlarm(String message) async {
+    try {
+      await BackgroundServiceManager.showAlarm(message);
+    } on Exception catch (error) {
+      debugPrint('Could not show remote monitoring notification: $error');
+    }
+  }
+
   Future<CameraController?> _createController(CameraDescription camera) async {
     final attempts = <(ResolutionPreset, ImageFormatGroup?)>[
-      if (defaultTargetPlatform == TargetPlatform.iOS) ...[
+      if (defaultTargetPlatform == TargetPlatform.windows) ...[
+        (ResolutionPreset.medium, null),
+        (ResolutionPreset.low, null),
+      ] else if (defaultTargetPlatform == TargetPlatform.iOS) ...[
         (ResolutionPreset.low, ImageFormatGroup.bgra8888),
         (ResolutionPreset.medium, ImageFormatGroup.bgra8888),
         (ResolutionPreset.low, null),
@@ -335,7 +545,9 @@ class _StandalonePageState extends State<StandalonePage>
           camera,
           preset,
           enableAudio: false,
-          imageFormatGroup: fmt ?? ImageFormatGroup.yuv420,
+          imageFormatGroup: defaultTargetPlatform == TargetPlatform.windows
+              ? null
+              : fmt ?? ImageFormatGroup.yuv420,
         );
         await controller.initialize();
         debugPrint('Camera OK preset=$preset format=$fmt');
@@ -345,6 +557,70 @@ class _StandalonePageState extends State<StandalonePage>
       }
     }
     return null;
+  }
+
+  void _startWindowsCameraSnapshots(
+    CameraController controller,
+    int generation,
+  ) {
+    _windowsSnapshotTimer?.cancel();
+    _windowsSnapshotTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => unawaited(_captureWindowsCameraSnapshot(controller, generation)),
+    );
+    unawaited(_captureWindowsCameraSnapshot(controller, generation));
+  }
+
+  Future<void> _captureWindowsCameraSnapshot(
+    CameraController controller,
+    int generation,
+  ) async {
+    if (_windowsSnapshotInFlight ||
+        generation != _cameraGeneration ||
+        !mounted ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
+    _windowsSnapshotInFlight = true;
+    try {
+      final snapshot = await controller.takePicture();
+      late Uint8List bytes;
+      try {
+        bytes = await snapshot.readAsBytes();
+      } finally {
+        await File(snapshot.path).delete();
+      }
+      if (generation != _cameraGeneration || !mounted || bytes.isEmpty) return;
+
+      final standalone = context.read<StandaloneProvider>();
+      standalone.setLatestCameraJpeg(bytes);
+      _markCameraHealthy();
+      await _runDetection(
+        () => _detector.detectFromJpeg(
+          bytes,
+          confidence: standalone.confidence,
+        ),
+      );
+    } catch (error) {
+      if (generation != _cameraGeneration || !mounted) return;
+      context.read<StandaloneProvider>().setCameraActive(false);
+      context.read<StandaloneProvider>().setLatestCameraJpeg(null);
+      _windowsSnapshotTimer?.cancel();
+      _windowsSnapshotTimer = null;
+      if (!_cameraError) {
+        debugPrint('Windows camera snapshot failed: $error');
+        setState(() {
+          _cameraError = true;
+          _cameraErrorMessage = lang == 'en'
+              ? 'Could not capture a frame from the Windows camera.'
+              : 'No se pudo capturar un fotograma de la cámara de Windows.';
+        });
+      }
+      _scheduleCameraReconnect(generation);
+    } finally {
+      _windowsSnapshotInFlight = false;
+    }
   }
 
   /// Calcula la rotación a aplicar al frame según el sensor de la cámara y la
@@ -376,7 +652,7 @@ class _StandalonePageState extends State<StandalonePage>
   }
 
   /// Consume un stream MJPEG de una cámara IP y lo envía al detector.
-  Future<void> _startIpStream(String url) async {
+  Future<void> _startIpStream(String url, {String? apiKey}) async {
     final generation = _cameraGeneration;
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8)
@@ -409,6 +685,9 @@ class _StandalonePageState extends State<StandalonePage>
         HttpHeaders.acceptHeader,
         'multipart/x-mixed-replace, image/jpeg',
       );
+      if (apiKey != null && apiKey.isNotEmpty) {
+        request.headers.set('X-API-Key', apiKey);
+      }
       if (uri.userInfo.isNotEmpty) {
         request.headers.set(
           HttpHeaders.authorizationHeader,
@@ -433,6 +712,7 @@ class _StandalonePageState extends State<StandalonePage>
             for (final frame in parser.add(chunk)) {
               if (!mounted || generation != _cameraGeneration) return;
               _ipLastFrameAt = DateTime.now();
+              context.read<StandaloneProvider>().setLatestCameraJpeg(frame);
               setState(() {
                 _lastIpFrame = frame;
                 _cameraError = false;
@@ -537,6 +817,7 @@ class _StandalonePageState extends State<StandalonePage>
       if (frame == null || generation != _cameraGeneration || !mounted) {
         return;
       }
+      context.read<StandaloneProvider>().setLatestCameraJpeg(frame);
       final standalone = context.read<StandaloneProvider>();
       if (!standalone.cameraActive) {
         _markCameraHealthy();
@@ -639,21 +920,34 @@ class _StandalonePageState extends State<StandalonePage>
     _ipStreamSub = null;
     _ipStreamStartedAt = null;
     _ipLastFrameAt = null;
+    context.read<StandaloneProvider>().setLatestCameraJpeg(null);
     context.read<StandaloneProvider>().setCameraActive(false);
     setState(() {
       _cameraError = true;
-      _cameraErrorMessage = lang == 'en'
-          ? 'Could not read the camera stream. Check its URL and that the phone and camera are on the same network.'
-          : 'No se pudo leer el stream de la cámara. Verifica la URL y que el teléfono y la cámara estén en la misma red.';
+      final remoteDesktop = context.read<StandaloneProvider>().cameraSource ==
+          StandaloneCameraSource.remoteDesktop;
+      _cameraErrorMessage = remoteDesktop
+          ? (lang == 'en'
+              ? 'Could not reach CocinaP Desktop. Check Tailscale, the HTTPS address and the API key.'
+              : 'No se pudo conectar con CocinaP Escritorio. Comprueba Tailscale, la dirección HTTPS y la clave API.')
+          : (lang == 'en'
+              ? 'Could not read the camera stream. Check its URL and that the phone and camera are on the same network.'
+              : 'No se pudo leer el stream de la cámara. Verifica la URL y que el teléfono y la cámara estén en la misma red.');
     });
     _scheduleCameraReconnect(generation);
   }
 
   void _scheduleCameraReconnect(int generation) {
+    final source = context.read<StandaloneProvider>().cameraSource;
+    final isWindowsCamera = defaultTargetPlatform == TargetPlatform.windows &&
+        source == StandaloneCameraSource.phone;
     if (generation != _cameraGeneration ||
         !mounted ||
-        context.read<StandaloneProvider>().cameraSource !=
-            StandaloneCameraSource.ipCamera ||
+        (!isWindowsCamera &&
+            !{
+              StandaloneCameraSource.ipCamera,
+              StandaloneCameraSource.remoteDesktop,
+            }.contains(source)) ||
         _cameraRetryTimer != null) {
       return;
     }
@@ -758,8 +1052,10 @@ class _StandalonePageState extends State<StandalonePage>
     }
   }
 
-  void _stopVideo() {
+  Future<void> _stopVideo() async {
     _cameraGeneration++;
+    _windowsSnapshotTimer?.cancel();
+    _windowsSnapshotTimer = null;
     _cameraHealthTimer?.cancel();
     _cameraHealthTimer = null;
     _rtspFrameTimer?.cancel();
@@ -777,7 +1073,7 @@ class _StandalonePageState extends State<StandalonePage>
     final rtspPlayer = _rtspPlayer;
     _rtspPlayer = null;
     _rtspController = null;
-    if (rtspPlayer != null) unawaited(rtspPlayer.dispose());
+    if (rtspPlayer != null) await rtspPlayer.dispose();
     _rtspScreenshotInFlight = false;
     _rtspVideoReady = false;
     _rtspPositionAdvanced = false;
@@ -790,11 +1086,11 @@ class _StandalonePageState extends State<StandalonePage>
     _ipHttpClient = null;
     _ipStreamStartedAt = null;
     _ipLastFrameAt = null;
-    _camera?.dispose();
+    final camera = _camera;
     _camera = null;
+    if (camera != null) await camera.dispose();
     _cameraDescription = null;
     _lastIpFrame = null;
-    _detecting = false;
     _lastDetectAt = null;
     _framesProcessed = 0;
   }
@@ -803,6 +1099,10 @@ class _StandalonePageState extends State<StandalonePage>
   /// intervalo (10, 15, 20... min sin persona) y lanza la notificación.
   void _startAlertLoop() {
     _alertTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (defaultTargetPlatform == TargetPlatform.android &&
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
       final standalone = context.read<StandaloneProvider>();
       final interval = standalone.nextDueInterval();
       if (interval == null) return;
@@ -825,7 +1125,7 @@ class _StandalonePageState extends State<StandalonePage>
     WidgetsBinding.instance.removeObserver(this);
     _alertTimer?.cancel();
     _cameraRetryTimer?.cancel();
-    _stopVideo();
+    unawaited(_stopVideo());
     _detector.dispose();
     context.read<StandaloneProvider>().removeListener(_onProviderChanged);
     context.read<StandaloneProvider>().setCameraActive(false);
@@ -880,13 +1180,54 @@ class _StandalonePageState extends State<StandalonePage>
       },
     );
     if (minutes != null && minutes > 0) {
-      standalone.startTimer(minutes: minutes);
+      if (standalone.cameraSource == StandaloneCameraSource.remoteCloud) {
+        await _sendRemoteControl('start', minutes: minutes);
+      } else {
+        standalone.startTimer(minutes: minutes);
+      }
+    }
+  }
+
+  Future<void> _sendRemoteControl(String action, {int? minutes}) async {
+    try {
+      final cameraView = _remoteCloudCameraKey.currentState;
+      if (cameraView == null) {
+        throw StateError(AppLocal.language == 'en'
+            ? 'The remote camera connection is not ready.'
+            : 'La conexión con la cámara remota aún no está lista.');
+      }
+      await cameraView.sendControl(action, minutes: minutes);
+    } on StateError catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocal.language == 'en'
+                ? 'Could not control the remote PC: ${error.message}'
+                : 'No se pudo controlar la PC remota: ${error.message}',
+          ),
+        ),
+      );
+    } on Exception catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocal.language == 'en'
+                ? 'Could not send the remote command: $error'
+                : 'No se pudo enviar el comando remoto: $error',
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final standalone = context.watch<StandaloneProvider>();
+    final remoteStreamUri = RemoteDesktopService.tryBuildStreamUri(
+      standalone.desktopServerUrl,
+    );
 
     final color = standalone.personPresent
         ? Colors.green
@@ -898,7 +1239,7 @@ class _StandalonePageState extends State<StandalonePage>
             ? "Standalone mode"
             : "Modo independiente"),
         actions: [
-          if (standalone.cameraSource == StandaloneCameraSource.ipCamera)
+          if (standalone.cameraSource != StandaloneCameraSource.phone)
             IconButton(
               tooltip: lang == 'en' ? 'Reconnect camera' : 'Reconectar cámara',
               onPressed: _cameraRestarting ? null : _reconnectCamera,
@@ -994,29 +1335,44 @@ class _StandalonePageState extends State<StandalonePage>
                           ),
                         ),
                       )
-                    : standalone.cameraSource == StandaloneCameraSource.ipCamera
-                        ? (standalone.cameraUrl
-                                .toLowerCase()
-                                .startsWith('rtsp://')
-                            ? (_rtspController == null
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : Video(controller: _rtspController!))
-                            : (_lastIpFrame == null
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : Image.memory(
-                                    _lastIpFrame!,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.contain,
-                                    gaplessPlayback: true,
-                                  )))
-                        : (_camera == null
+                    : standalone.cameraSource ==
+                            StandaloneCameraSource.remoteCloud
+                        ? (_remoteCloudCredentials == null
                             ? const Center(child: CircularProgressIndicator())
-                            : CameraPreview(_camera!)),
+                            : RemoteCloudCameraView(
+                                key: _remoteCloudCameraKey,
+                                credentials: _remoteCloudCredentials!,
+                                english: lang == 'en',
+                                onMonitoringState: _onRemoteMonitoringState,
+                              ))
+                        : standalone.cameraSource !=
+                                StandaloneCameraSource.phone
+                            ? ((standalone.cameraSource ==
+                                            StandaloneCameraSource.remoteDesktop
+                                        ? remoteStreamUri?.toString() ?? ''
+                                        : standalone.cameraUrl)
+                                    .toLowerCase()
+                                    .startsWith('rtsp://')
+                                ? (_rtspController == null
+                                    ? const Center(
+                                        child: CircularProgressIndicator(),
+                                      )
+                                    : Video(controller: _rtspController!))
+                                : (_lastIpFrame == null
+                                    ? const Center(
+                                        child: CircularProgressIndicator(),
+                                      )
+                                    : Image.memory(
+                                        _lastIpFrame!,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        fit: BoxFit.contain,
+                                        gaplessPlayback: true,
+                                      )))
+                            : (_camera == null
+                                ? const Center(
+                                    child: CircularProgressIndicator())
+                                : CameraPreview(_camera!)),
                 if (!_cameraError)
                   Positioned(
                     top: 10,
@@ -1202,7 +1558,10 @@ class _StandalonePageState extends State<StandalonePage>
                   ),
                 if (standalone.timerRunning && !standalone.timerPaused)
                   ElevatedButton.icon(
-                    onPressed: () => standalone.pauseTimer(),
+                    onPressed: () => standalone.cameraSource ==
+                            StandaloneCameraSource.remoteCloud
+                        ? _sendRemoteControl('pause')
+                        : standalone.pauseTimer(),
                     icon: const Icon(Icons.pause),
                     label: Text(lang == "en" ? "Pause" : "Pausa"),
                     style: ElevatedButton.styleFrom(
@@ -1210,7 +1569,10 @@ class _StandalonePageState extends State<StandalonePage>
                   ),
                 if (standalone.timerRunning && standalone.timerPaused)
                   ElevatedButton.icon(
-                    onPressed: () => standalone.resumeTimer(),
+                    onPressed: () => standalone.cameraSource ==
+                            StandaloneCameraSource.remoteCloud
+                        ? _sendRemoteControl('resume')
+                        : standalone.resumeTimer(),
                     icon: const Icon(Icons.play_arrow),
                     label: Text(lang == "en" ? "Resume" : "Reanudar"),
                     style: ElevatedButton.styleFrom(
@@ -1218,7 +1580,10 @@ class _StandalonePageState extends State<StandalonePage>
                   ),
                 if (standalone.timerRunning)
                   ElevatedButton.icon(
-                    onPressed: () => standalone.stopTimer(),
+                    onPressed: () => standalone.cameraSource ==
+                            StandaloneCameraSource.remoteCloud
+                        ? _sendRemoteControl('stop')
+                        : standalone.stopTimer(),
                     icon: const Icon(Icons.stop),
                     label: Text(lang == "en" ? "Stop" : "Parar"),
                     style: ElevatedButton.styleFrom(
@@ -1234,11 +1599,15 @@ class _StandalonePageState extends State<StandalonePage>
               child: Text(
                 defaultTargetPlatform == TargetPlatform.iOS
                     ? (lang == 'en'
-                        ? 'Keep CocinaP open to keep the live camera running on iPhone. iOS suspends camera networking in the background; the stream reconnects when you return.'
-                        : 'Mantén CocinaP abierta para conservar el video en iPhone. iOS suspende la conexión de cámara en segundo plano; el stream se reconecta al volver.')
-                    : (lang == 'en'
-                        ? 'Monitoring keeps the screen awake and uses an Android foreground notification. Reopen CocinaP if Android pauses the stream; it will reconnect automatically.'
-                        : 'El monitoreo mantiene la pantalla encendida y usa una notificación persistente en Android. Si Android pausa el video, vuelve a CocinaP para reconectarlo automáticamente.'),
+                        ? 'Keep CocinaP open on iPhone. iOS pauses camera monitoring when the app is in the background.'
+                        : 'Mantén CocinaP abierta en iPhone. iOS pausa el monitoreo de cámara al dejar la app en segundo plano.')
+                    : (standalone.cameraSource == StandaloneCameraSource.phone
+                        ? (lang == 'en'
+                            ? 'Android keeps phone-camera detection running with a persistent notification. Camera-IP monitoring requires CocinaP to stay open.'
+                            : 'Android mantiene la detección de la cámara del teléfono con una notificación persistente. El monitoreo de cámara IP requiere mantener CocinaP abierta.')
+                        : (lang == 'en'
+                            ? 'Keep CocinaP open while monitoring an IP camera on Android.'
+                            : 'Mantén CocinaP abierta para monitorear una cámara IP en Android.')),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 11, color: Colors.white60),
               ),
@@ -1263,13 +1632,13 @@ class _StandalonePageState extends State<StandalonePage>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Text(
-              standalone.cameraSource == StandaloneCameraSource.ipCamera
+              standalone.cameraSource == StandaloneCameraSource.phone
                   ? (AppLocal.language == "en"
-                      ? "Using IP camera · ${standalone.cameraSourceLabel}"
-                      : "Usando cámara IP · ${standalone.cameraSourceLabel}")
-                  : (AppLocal.language == "en"
                       ? "Using phone camera"
-                      : "Usando cámara del móvil"),
+                      : "Usando cámara del móvil")
+                  : (AppLocal.language == "en"
+                      ? "Using ${standalone.cameraSourceLabel}"
+                      : "Usando ${standalone.cameraSourceLabel}"),
               style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
               textAlign: TextAlign.center,
             ),
@@ -1397,6 +1766,14 @@ class _DevicesSheet extends StatelessWidget {
       await _configureIpCamera(context);
       return;
     }
+    if (source == StandaloneCameraSource.remoteDesktop) {
+      await _configureRemoteDesktop(context);
+      return;
+    }
+    if (source == StandaloneCameraSource.remoteCloud) {
+      await _configureRemoteCloud(context);
+      return;
+    }
     standalone.setCameraSource(source);
     await settings.setStandaloneSourceIndex(0);
     if (context.mounted) Navigator.pop(context);
@@ -1418,12 +1795,78 @@ class _DevicesSheet extends StatelessWidget {
     if (context.mounted) Navigator.pop(context);
   }
 
+  Future<void> _configureRemoteDesktop(BuildContext context) async {
+    final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    final config = await showRemoteDesktopDialog(
+      context,
+      language: AppLocal.language,
+      initialBaseUrl: standalone.desktopServerUrl,
+      initialApiKey: standalone.desktopApiKey,
+    );
+    if (config == null || !context.mounted) return;
+    standalone.setDesktopConnection(
+      serverUrl: config.baseUrl,
+      apiKey: config.apiKey,
+    );
+    standalone.setCameraSource(StandaloneCameraSource.remoteDesktop);
+    await settings.setServerUrl(config.baseUrl);
+    await settings.setApiKey(config.apiKey);
+    await settings.setStandaloneSourceIndex(2);
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  Future<void> _configureRemoteCloud(BuildContext context) async {
+    final standalone = context.read<StandaloneProvider>();
+    final settings = context.read<SettingsService>();
+    final credentials = await showRemoteCloudPairingDialog(
+      context,
+      language: AppLocal.language,
+    );
+    if (credentials == null || !context.mounted) return;
+    try {
+      await RemoteCloudService().requestViewerToken(credentials);
+      await settings.setRemoteCloudCredentials(credentials);
+      standalone.setCameraSource(StandaloneCameraSource.remoteCloud);
+      await settings.setStandaloneSourceIndex(3);
+      if (context.mounted) Navigator.pop(context);
+    } on HttpException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocal.language == 'en'
+                ? 'Could not pair with CocinaP Cloud: ${error.message}'
+                : 'No se pudo vincular con CocinaP Cloud: ${error.message}',
+          ),
+        ),
+      );
+    } on SocketException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocal.language == 'en'
+                ? 'Could not reach CocinaP Cloud.'
+                : 'No se pudo conectar con CocinaP Cloud.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = AppLocal.language;
     final standalone = context.watch<StandaloneProvider>();
     final scheme = Theme.of(context).colorScheme;
     final isPhone = standalone.cameraSource == StandaloneCameraSource.phone;
+    final isIpCamera =
+        standalone.cameraSource == StandaloneCameraSource.ipCamera;
+    final isRemoteDesktop =
+        standalone.cameraSource == StandaloneCameraSource.remoteDesktop;
+    final isRemoteCloud =
+        standalone.cameraSource == StandaloneCameraSource.remoteCloud;
 
     return SafeArea(
       child: Padding(
@@ -1445,6 +1888,13 @@ class _DevicesSheet extends StatelessWidget {
                 style: TextStyle(fontSize: 13, color: Colors.white60),
               ),
               const SizedBox(height: 12),
+
+              _DeviceSectionTitle(
+                title: lang == 'en' ? 'Local use' : 'Uso local',
+                subtitle: lang == 'en'
+                    ? 'Monitor from this phone or a camera on your home network.'
+                    : 'Monitorea desde este móvil o una cámara de tu red local.',
+              ),
 
               // Cámara del móvil
               _DeviceTile(
@@ -1468,7 +1918,7 @@ class _DevicesSheet extends StatelessWidget {
                     : (lang == "en"
                         ? "Not configured yet"
                         : "Aún no has configurado una URL"),
-                selected: !isPhone,
+                selected: isIpCamera,
                 onTap: () => _select(context, StandaloneCameraSource.ipCamera),
                 trailing: TextButton(
                   onPressed: () => _configureIpCamera(context),
@@ -1476,7 +1926,58 @@ class _DevicesSheet extends StatelessWidget {
                 ),
               ),
 
-              // PC connection removed
+              const SizedBox(height: 8),
+              _DeviceSectionTitle(
+                title: lang == 'en'
+                    ? 'Use from outside your home'
+                    : 'Usar fuera de casa',
+                subtitle: lang == 'en'
+                    ? 'The home PC must stay on and connected to the internet.'
+                    : 'La PC de casa debe permanecer encendida y conectada a internet.',
+              ),
+
+              _DeviceTile(
+                icon: Icons.desktop_windows,
+                title: lang == 'en'
+                    ? 'Remote CocinaP Desktop'
+                    : 'CocinaP Escritorio remoto',
+                subtitle: standalone.desktopServerUrl.isNotEmpty
+                    ? standalone.desktopServerUrl
+                    : (lang == 'en'
+                        ? 'Connect securely over Tailscale'
+                        : 'Conexión segura mediante Tailscale'),
+                selected: isRemoteDesktop,
+                onTap: () => _select(
+                  context,
+                  StandaloneCameraSource.remoteDesktop,
+                ),
+                trailing: TextButton(
+                  onPressed: () => _configureRemoteDesktop(context),
+                  child: Text(lang == 'en' ? 'Configure' : 'Configurar'),
+                ),
+              ),
+              _DeviceTile(
+                icon: Icons.cloud_outlined,
+                title: lang == 'en'
+                    ? 'CocinaP Cloud (technical test)'
+                    : 'CocinaP Cloud (prueba técnica)',
+                subtitle: isRemoteCloud
+                    ? (lang == 'en'
+                        ? 'Paired with CocinaP Cloud'
+                        : 'Vinculada con CocinaP Cloud')
+                    : (lang == 'en'
+                        ? 'Optional cloud access; billing is not enabled yet.'
+                        : 'Acceso opcional por nube; el cobro aún no está habilitado.'),
+                selected: isRemoteCloud,
+                onTap: () => _select(
+                  context,
+                  StandaloneCameraSource.remoteCloud,
+                ),
+                trailing: TextButton(
+                  onPressed: () => _configureRemoteCloud(context),
+                  child: Text(lang == 'en' ? 'Pair' : 'Vincular'),
+                ),
+              ),
 
               const SizedBox(height: 20),
               Text(
@@ -1511,7 +2012,26 @@ class _DevicesSheet extends StatelessWidget {
                     ? "Configure IP camera in Settings and paste HTTP/MJPEG URL."
                     : "Toca 'Cámara IP → Configurar' y pega la URL HTTP/MJPEG de tu cámara.",
               ),
-              // PC connection section removed
+              _HowToRow(
+                number: 3,
+                icon: Icons.desktop_windows,
+                title: lang == 'en'
+                    ? 'Remote PC over Tailscale'
+                    : 'PC remota mediante Tailscale',
+                body: lang == 'en'
+                    ? 'The PC must stay on, connected to the camera, with monitoring running. Install Tailscale on both devices; do not expose the camera or port 8080 to the public internet.'
+                    : 'La PC debe permanecer encendida, conectada a la cámara y monitoreando. Instala Tailscale en ambos dispositivos; no expongas la cámara ni el puerto 8080 a Internet.',
+              ),
+              _HowToRow(
+                number: 4,
+                icon: Icons.cloud_outlined,
+                title: lang == 'en'
+                    ? 'CocinaP Cloud (technical test)'
+                    : 'CocinaP Cloud (prueba técnica)',
+                body: lang == 'en'
+                    ? 'Keep CocinaP running on the home PC and scan its pairing QR. This test is not a paid customer service yet.'
+                    : 'Deja CocinaP abierto en la PC de casa y escanea su QR de vinculación. Esta prueba aún no es un servicio comercial de pago.',
+              ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1536,6 +2056,37 @@ class _DevicesSheet extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DeviceSectionTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _DeviceSectionTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: Colors.white60),
+          ),
+        ],
       ),
     );
   }

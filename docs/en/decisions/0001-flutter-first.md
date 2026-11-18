@@ -14,7 +14,8 @@ desktop in every kitchen does not scale.
 
 Adopt a **Flutter mobile app** (Android and iOS) as the product's main
 technology, able to run fully standalone with the phone camera and on-device
-detection. The Python desktop becomes an optional complementary backend.
+detection. A Python desktop was initially retained as an optional backend and
+was later retired; see ADR 0005.
 
 ## Consequences
 
@@ -26,6 +27,3 @@ detection. The Python desktop becomes an optional complementary backend.
 **Negative**
 - Requires learning/tuning the Flutter and Dart ecosystem.
 - Building iOS needs extra infrastructure (see ADR 0006).
-
-**Neutral**
-- The Python backend is kept for those who want fire/smoke detection.

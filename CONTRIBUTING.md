@@ -28,21 +28,9 @@ Authorized contributors should:
 cd cocinap_mobile
 flutter analyze
 flutter test
-
-cd ../yolo
-ruff check .
-ruff format --check .
-pytest
 ```
 
 ## Code standards
-
-### Python
-
-- Follow Ruff and PEP 8 conventions.
-- Keep public functions type annotated where practical.
-- Use English identifiers and comments.
-- Keep one focused pytest suite per module or behavior.
 
 ### Flutter and Dart
 
@@ -52,6 +40,9 @@ pytest
 - Use English identifiers and comments; user-facing text belongs in bilingual
   `content.dart` strings.
 - Format and analyze changed files before committing.
+- For Windows changes, enable Developer Mode and install Visual Studio 2022
+  with the **Desktop development with C++** workload; run
+  `flutter build windows --release` when build validation is available.
 
 ## Commit example
 

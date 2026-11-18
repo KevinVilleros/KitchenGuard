@@ -4,35 +4,35 @@ Current status and planned features. This is a living document.
 
 ---
 
-## Current status (v1.0.2-pre)
+## Current status (v1.0.12-pre)
 
 ### Done
 
-- Flutter mobile app (Android + iOS) with 5 tabs.
+- Flutter app for Android, iOS and Windows.
 - Standalone mode: phone camera or IP camera.
 - Local ONVIF discovery; RTSP and HTTP/MJPEG playback.
-- **On-device** people detection with TFLite (SSD MobileNet V2 / COCO).
+- **On-device** person detection with ML Kit on mobile and MoveNet on Windows.
 - Monitoring timer with pause/resume/stop.
 - Local alerts (sound + vibration) for unattended cooking.
 - Local background notifications (Android).
-- PC connection: mDNS, QR and manual.
-- MJPEG stream from the PC and SSE alarms.
-- Python/YOLO backend with fire/smoke detection (archived under `yolo/`).
-- Backend security: API key, rate limiting, auditing.
+- Remote Windows camera source over Tailscale Serve.
+- Authenticated Windows MJPEG stream over Tailscale Serve.
 - Bilingual UI (ES/EN).
 - Onboarding, camera guide and guided UI tour.
-- CI: cloud iOS build and Python CI.
+- CI: Android and iOS mobile builds.
 
 ---
 
 ## Upcoming versions
 
-### Release blockers before publishing v1.0.2
+### Release blockers before publishing v1.0.12
 
 - [ ] Test ONVIF, RTSP and MJPEG against a documented matrix of camera models
   and routers; V380 Pro / AIT36106 has not yet been validated.
 - [ ] Run installation, upgrade, permission, alarm, reconnection and background
   QA on physical Android and iPhone devices.
+- [ ] Build and validate the Windows app, camera capture, MoveNet inference and
+  Tailscale streaming on Windows hardware.
 - [ ] Configure production signing and verify signed APK/AAB and IPA artifacts;
   the debug key must not be used for store distribution.
 - [ ] Review the licenses for libmpv, FFmpeg/codecs and other native
@@ -69,7 +69,7 @@ communicate directly on the same network.
 
 - [ ] Export alarm history (CSV/JSON).
 - [ ] Home-screen widgets (monitoring status).
-- [ ] Support for more backend desktop platforms.
+- [ ] Publish a signed Windows desktop package.
 
 ### Backlog
 

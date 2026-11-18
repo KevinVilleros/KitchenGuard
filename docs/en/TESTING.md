@@ -8,9 +8,8 @@ Test strategy and continuous integration/delivery automation for the project.
 
 | Layer | Tool | Location | Covers |
 |---|---|---|---|
-| Mobile app | `flutter_test` | `cocinap_mobile/test/` | Widgets and startup |
-| Backend | `pytest` | `yolo/tests/` | Config, engine, analyzer, security |
-| Static analysis | `flutter analyze`, `ruff` | — | Lint and types |
+| Flutter app | `flutter_test` | `cocinap_mobile/test/` | Widgets, detector parsing, remote API |
+| Static analysis | `flutter analyze` | `cocinap_mobile/` | Lint and types |
 
 ---
 
@@ -66,29 +65,16 @@ warning; that artifact cannot be uploaded to Google Play.
 
 ---
 
-## 3. Backend tests
+## 3. Windows and remote access tests
 
 ```bash
-cd yolo
-pytest
+cd cocinap_mobile
+flutter test test/windows_person_detector_test.dart test/remote_camera_server_test.dart test/remote_desktop_service_test.dart
 ```
 
-Existing suites:
-
-| File | Area |
-|---|---|
-| `test_config.py` | Config load and save |
-| `test_engine.py` | Detection/status engine |
-| `test_analyzer.py` | Risk analyzer |
-| `test_runner.py` | Inference loop |
-| `test_security.py` | Auth, rate limit and audit |
-| `test_package.py` | Packaging |
-
-With coverage:
-
-```bash
-pytest --cov=cocinap yolo/tests
-```
+These tests cover MoveNet output parsing, API-key authentication, camera
+availability responses and remote-address validation. They do not replace a
+Windows build, webcam/RTSP device testing, or an end-to-end Tailscale test.
 
 ---
 
@@ -100,9 +86,6 @@ cd cocinap_mobile
 flutter analyze
 dart format --set-exit-if-changed .
 
-# Backend
-ruff check yolo/
-ruff format --check yolo/
 ```
 
 ---
@@ -148,14 +131,6 @@ The `build-signed` job only signs when the secrets `IOS_CERTIFICATE`,
 `IOS_CERTIFICATE_PASSWORD` and `IOS_PROVISIONING_PROFILE` are set; otherwise it
 is skipped.
 
-### 5.2 `python-ci.yml` — "Python CI (yolo backend)"
-
-| Aspect | Detail |
-|---|---|
-| Trigger | changes under `yolo/**` |
-| `working-directory` | `yolo` |
-| Actions | backend lint (`ruff`) and tests (`pytest`) |
-
 ---
 
 ## 6. Continuous delivery (releases)
@@ -167,18 +142,18 @@ is skipped.
 - **iOS:** the `.ipa` is produced in CI; it is distributed via Sideloadly (free
   account: expires after 7 days) or TestFlight/App Store with signing.
 
-### Backend
+### Windows desktop
 
-- `python build_app.py` packages the `.exe` (PyInstaller).
-- `python build_all.py` runs the full build (app + installer).
+- Requires Windows Developer Mode and Visual Studio 2022 with **Desktop
+  development with C++**.
+- Build with `flutter build windows --release`; the repository does not
+  currently publish a Windows CI artifact.
 
 ---
 
 ## 7. Versioning
 
 - **Semantic Versioning** is followed (`MAJOR.MINOR.PATCH`).
-- The backend version lives in `yolo/cocinap/__init__.py` and
-  `yolo/cocinap/resources/version.txt`.
 - The app version lives in `cocinap_mobile/pubspec.yaml`.
 - Changes are recorded in [CHANGELOG.md](../CHANGELOG.md) (Keep a Changelog
   format).
@@ -191,6 +166,7 @@ is skipped.
 - [ ] `flutter test` green.
 - [ ] APK and IPA reproducible from documented artifacts.
 - [ ] Android and iPhone matrix completed on physical devices.
+- [ ] Windows release build and camera/detector tested on Windows hardware.
 - [ ] Real ONVIF, RTSP and MJPEG camera matrix tested and published; record
   incompatible models and negative test results.
 - [ ] Review libmpv, FFmpeg/codec and native dependency licenses/notices before
@@ -200,8 +176,7 @@ is skipped.
   app-store listings.
 - [ ] Camera, local-network and background permissions tested on-device.
 - [ ] Known defects include an owner, impact and correction plan.
-- [ ] `ruff check` and `pytest` green (backend).
-- [ ] Version bump in `pubspec.yaml` and backend.
+- [ ] Version bump in `pubspec.yaml`.
 - [ ] New entry in `CHANGELOG.md`.
 - [ ] iOS workflow completed successfully.
 - [ ] `.ipa` artifact verified.

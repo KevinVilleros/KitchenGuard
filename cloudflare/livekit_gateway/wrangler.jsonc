@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cocinap-livekit-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-14",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cocinap-livekit-gateway",
+      "database_id": "aa00d82a-be3b-4fb2-8c8a-bed489a7dc5d",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

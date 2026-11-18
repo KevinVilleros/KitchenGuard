@@ -1,47 +1,14 @@
 import 'dart:ui' as ui;
+import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:image/image.dart' as img;
+import 'detection_result.dart';
+import 'windows_person_detector.dart';
 
-/// Una caja detectada, con coordenadas normalizadas [0,1] sobre la imagen de
-/// entrada.
-class DetectedBox {
-  final double top;
-  final double left;
-  final double bottom;
-  final double right;
-  final double score;
-  final int classId;
-  final String label;
-
-  const DetectedBox({
-    required this.top,
-    required this.left,
-    required this.bottom,
-    required this.right,
-    required this.score,
-    required this.classId,
-    required this.label,
-  });
-}
-
-/// Resultado de una inferencia de detección de personas.
-class DetectionResult {
-  /// Número de personas detectadas.
-  final int count;
-
-  /// Máxima puntuación de confianza de las personas detectadas.
-  final double maxScore;
-
-  /// Todas las detecciones (para depuración).
-  final List<DetectedBox> boxes;
-
-  const DetectionResult(this.count, this.maxScore, [this.boxes = const []]);
-
-  static const DetectionResult empty = DetectionResult(0, 0);
-}
+export 'detection_result.dart' show DetectedBox, DetectionResult;
 
 /// Detector de personas on-device usando **Google ML Kit Pose Detection**.
 ///
@@ -52,6 +19,7 @@ class DetectionResult {
 /// objetos con personas: si no hay un cuerpo real, no hay pose.
 class PersonDetector {
   PoseDetector? _detector;
+  WindowsPersonDetector? _windowsDetector;
   bool _loaded = false;
 
   /// Puntos clave que usamos para estimar la confianza de que hay una persona.
@@ -68,6 +36,13 @@ class PersonDetector {
   /// Crea el detector de poses de ML Kit.
   Future<void> load(String assetPath) async {
     if (_loaded) return;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      _windowsDetector = WindowsPersonDetector();
+      await _windowsDetector!.load();
+      _loaded = true;
+      debugPrint('PD MoveNet ONNX listo para Windows');
+      return;
+    }
     _detector = PoseDetector(
       options: PoseDetectorOptions(
         model: PoseDetectionModel.base,
@@ -83,7 +58,11 @@ class PersonDetector {
     Uint8List jpeg, {
     double confidence = 0.5,
   }) async {
-    if (!_loaded || _detector == null) return DetectionResult.empty;
+    if (!_loaded) return DetectionResult.empty;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return _windowsDetector!.detectJpeg(jpeg, confidence: confidence);
+    }
+    if (_detector == null) return DetectionResult.empty;
     try {
       final image = img.decodeJpg(jpeg);
       if (image == null) return DetectionResult.empty;
@@ -103,7 +82,12 @@ class PersonDetector {
     img.Image image, {
     double confidence = 0.5,
   }) async {
-    if (!_loaded || _detector == null) return DetectionResult.empty;
+    if (!_loaded) return DetectionResult.empty;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      final jpeg = Uint8List.fromList(img.encodeJpg(image));
+      return _windowsDetector!.detectJpeg(jpeg, confidence: confidence);
+    }
+    if (_detector == null) return DetectionResult.empty;
     try {
       final input = inputFromRgbImage(
         image,
@@ -122,7 +106,13 @@ class PersonDetector {
     int rotationDegrees = 0,
     double confidence = 0.5,
   }) async {
-    if (!_loaded || _detector == null) return DetectionResult.empty;
+    if (!_loaded) return DetectionResult.empty;
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      throw UnsupportedError(
+        'Windows cameras provide snapshots instead of image streams.',
+      );
+    }
+    if (_detector == null) return DetectionResult.empty;
     try {
       if (defaultTargetPlatform == TargetPlatform.iOS) {
         final input = _inputFromIosBgra(image);
@@ -402,11 +392,15 @@ class PersonDetector {
   bool get loaded => _loaded;
 
   /// Descripción del estado del detector (para diagnóstico en pantalla).
-  String get debugInfo => 'ML Kit Pose · cuerpo (33 puntos)';
+  String get debugInfo => defaultTargetPlatform == TargetPlatform.windows
+      ? 'MoveNet Lightning · ONNX (17 puntos)'
+      : 'ML Kit Pose · cuerpo (33 puntos)';
 
   void dispose() {
     _detector?.close();
     _detector = null;
+    unawaited(_windowsDetector?.dispose());
+    _windowsDetector = null;
     _loaded = false;
   }
 }

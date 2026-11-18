@@ -1,7 +1,7 @@
 name: cocinap_mobile
 description: CocinaP mobile companion app
 publish_to: 'none'
-version: 1.0.11+11
+version: 1.0.12+12
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -14,11 +14,10 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   flutter_local_notifications: ^18.0.0
   cupertino_icons: ^1.0.8
-  flutter_background_service: ^5.0.0
-  flutter_background_service_android: ^6.0.0
-  flutter_background_service_ios: ^5.0.0
   camera: ^0.11.0
+  camera_windows: ^0.3.0+1
   google_mlkit_pose_detection: ^0.16.1
+  flutter_onnxruntime: ^1.9.0
   path_provider: ^2.1.0
   image: ^4.2.0
   crypto: ^3.0.7
@@ -26,6 +25,9 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
+  livekit_client: ^2.13.2
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.5.0
   wakelock_plus: ^1.5.2
 
 dev_dependencies:
@@ -35,3 +37,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/models/movenet_lightning.onnx
+    - assets/models/ONNX-MOVENET-LICENSE.txt
+    - assets/models/MODEL-NOTICE.txt

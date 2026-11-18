@@ -70,11 +70,29 @@ When adding UI, test on small screens (~411x921 logical px).
 - If it is not found, the camera may not support ONVIF or the router may isolate
   Wi-Fi clients. Use manual setup only if you have the full **RTSP** or
   **HTTP/MJPEG** stream URL; the IP address alone does not identify a stream.
+- If it is found but ONVIF setup fails, tap the pencil next to the camera to
+  reuse its IP and edit example RTSP paths. Check the exact path and RTSP
+  credentials in the camera app, web settings or manual; suggested paths may
+  not match the model.
 - V380 Pro is an app name and does not guarantee all associated models expose
   ONVIF/RTSP. Model **AIT36106** has not been validated with CocinaP.
 - On iPhone, this build cannot use ONVIF multicast discovery because it requires
   an Apple entitlement that is not included. Return to manual setup and use a
   compatible stream URL.
+
+### Cannot connect to CocinaP Windows away from home
+
+- Confirm Tailscale is connected on both the phone and PC and both belong to
+  the same private tailnet.
+- On the PC, confirm CocinaP is running, remote access is enabled in Settings,
+  and check `tailscale serve
+  status`. Enter the complete HTTPS address ending in `.ts.net`; the app
+  rejects HTTP and public addresses.
+- Copy the API key again from Windows Settings. The app sends it in an HTTPS
+  header; do not put it in the URL.
+- Do not forward router port 8080 or use Tailscale Funnel.
+- Keep the Windows PC awake with monitoring active. Desktop alerts are not
+  synchronized to the phone.
 
 ### Person detection doesn't alert
 
@@ -115,27 +133,34 @@ Too many rapid requests. Wait for `Retry-After` and retry.
 
 ---
 
-## 4. Backend (PC)
+## 4. Windows app
 
-### `pip install` fails to build dependencies
+### Windows build requests Developer Mode
 
-Install **Visual Studio Build Tools** (needed by some packages like
-numpy/opencv/PySide6).
+Enable Windows Developer Mode, then rerun `flutter pub get`.
 
-### YOLO model won't load
+### Windows build cannot find C++ tools
 
-- Check that `yolo/models/yolo11n.pt` exists.
-- In packaged mode, the model is resolved via `sys._MEIPASS`.
+Install Visual Studio 2022 with the **Desktop development with C++** workload.
 
-### No camera signal on the PC
+### MoveNet model fails to load
 
-- Check the camera in **Config** (USB or RTSP/HTTP URL).
-- Close other apps using the camera.
-- Restart the app after changing the device/URL (requires a restart).
+Confirm the app bundle includes `assets/models/movenet_lightning.onnx` and
+rebuild after changing dependencies. See the error in the Flutter debug log.
 
-### Port 8080 is in use
+### No camera signal on Windows
 
-Change it in `config.json` (`WEB_PORT`) or free the port.
+- Check Windows **Settings > Privacy & security > Camera** permissions.
+- Close other applications using the webcam and select the camera source again.
+- Webcam capture is snapshot-based (about 1 FPS); use an IP camera for a
+  continuous higher-rate stream.
+
+### Remote stream unavailable
+
+- Keep CocinaP running on the PC and verify its camera is active.
+- Confirm Tailscale is connected on both devices and `tailscale serve status`
+  shows the expected `.ts.net` address.
+- Verify the API key and do not expose port 8080 through the router.
 
 ---
 
@@ -145,7 +170,7 @@ Change it in `config.json` (`WEB_PORT`) or free the port.
 No. Standalone mode works with the phone alone (person detection).
 
 **Does it detect fire and smoke without a PC?**
-No. Fire and smoke require the PC backend to be connected.
+No. CocinaP currently detects people only.
 
 **Are my videos uploaded to the Internet?**
 No. All processing is local (device or your PC).

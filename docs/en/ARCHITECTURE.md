@@ -7,47 +7,37 @@ components, how they communicate, the data flow and the structural decisions.
 
 ## 1. Overview
 
-CocinaP is a **kitchen safety** system made of two parts:
-
-1. **Mobile app (Flutter)** — the main technology. It runs **standalone** on
-   Android and iOS: it uses the phone camera or an IP camera and detects people
-   **on-device** (TensorFlow Lite), with no PC and no cloud required.
-2. **Python/YOLO backend (optional)** — a Windows desktop application that adds
-   **fire and smoke** detection with a YOLO model, plus an HTTP server the mobile
-   app can connect to over WiFi.
-
-The mobile app can operate:
-
-- **Standalone mode:** all processing happens on the phone.
-- **Connected mode:** the app connects over WiFi to the PC backend and consumes
-  its video stream, status, alarms and configuration.
+CocinaP is one Flutter application for **Android, iOS and Windows**. It supports
+local monitoring with an on-device camera or IP camera, and lets the Windows
+app securely provide its selected camera stream to a phone over Tailscale.
+Detection runs locally: ML Kit Pose Detection on Android/iOS and MoveNet
+Lightning through ONNX Runtime on Windows.
 
 ```
                          ┌───────────────────────────────────────────┐
                          │            MOBILE APP (Flutter)            │
-                         │  Android / iOS                             │
+                         │  Android / iOS / Windows                   │
                          │                                            │
    Phone camera ───────► │  Standalone mode                           │
-   (or IP camera)        │   • TFLite: person detection               │
+   (or IP camera)           │   • ML Kit / MoveNet: person detection      │
                          │   • Monitoring timer                       │
                          │   • Local alarms (sound/vibration)         │
                          │                                            │
-                         │  Connected mode                            │
-                         │   • mDNS discovery · QR · manual URL       │
-                         │   • MJPEG stream from PC                   │
-                         │   • SSE alarms                             │
+                         │  Remote Windows video (optional)            │
+                         │   • Tailscale private network              │
+                         │   • HTTPS + X-API-Key                      │
+                         │   • Authenticated MJPEG stream from PC      │
                          └───────────────┬────────────────────────────┘
-                                         │  HTTP/1.1 (WiFi LAN)
+                                         │  HTTPS via Tailscale Serve
                                          │  X-API-Key
                                          ▼
                          ┌───────────────────────────────────────────┐
-                         │          PC BACKEND (Python, Windows)      │
-                         │  PySide6 GUI + ThreadingHTTPServer         │
+                         │          CocinaP (Flutter, Windows)         │
+                         │  Local camera and monitoring               │
                          │                                            │
-   USB / IP camera ─────► │  YOLO11n (fire/smoke/people)               │
-                         │  Risk analyzer · Alarms                    │
-                         │  Web UI (REST + MJPEG + SSE)               │
-                         │  Security: API key, rate limit, audit      │
+   USB / IP camera ─────► │  MoveNet Lightning (person detection)      │
+                         │  Authenticated MJPEG endpoint              │
+                         │  Tailscale Serve (private HTTPS)           │
                          └───────────────────────────────────────────┘
 ```
 
@@ -65,45 +55,39 @@ Layered architecture with the **Provider** pattern for state.
 | UI | `lib/pages/` | Screens (Home, Monitoring, Connect, Alarms, Settings) |
 | UI | `lib/widgets/` | Reusable components (graphs, MJPEG, tour) |
 | State | `lib/providers/` | One `ChangeNotifier` per domain |
-| Services | `lib/services/` | HTTP, mDNS, MJPEG, TFLite, notifications, prefs |
+| Services | `lib/services/` | HTTP, ONVIF, MJPEG, detection, notifications and settings |
 | Content | `lib/content/` | Bilingual ES/EN strings |
 
 **Providers:**
 
 | Provider | Responsibility |
 |---|---|
-| `ServerProvider` | PC connection state, mDNS discovery, API key, recent servers |
-| `AlarmsProvider` | Alarms received from the server (SSE) |
-| `StandaloneProvider` | Standalone monitoring: camera, timer, person detection, alerts |
+| `StandaloneProvider` | Local or remote camera source, timer, person detection and alerts |
 | `TourController` | Guided UI tour state |
 
 **Services:**
 
 | Service | Responsibility |
 |---|---|
-| `ApiService` | HTTP client for the backend REST API (status, info, timers) |
-| `DiscoveryService` | mDNS discovery of `_cocinap._tcp.local.` |
-| `MjpegService` | MJPEG stream parser from the PC |
-| `PersonDetector` | On-device TFLite inference (SSD MobileNet V2 / COCO) |
+| `RemoteDesktopService` | Validates Tailscale Serve URL and tests the desktop API |
+| `MjpegService` | Receives the selected camera's MJPEG stream |
+| `PersonDetector` | ML Kit on Android/iOS; delegates to MoveNet on Windows |
+| `WindowsPersonDetector` | MoveNet Lightning inference via ONNX Runtime |
+| `RemoteCameraServer` | Authenticated Windows MJPEG host on port 8080 |
 | `BackgroundServiceManager` | Background service and local notifications |
 | `SettingsService` | Persistence with `SharedPreferences` |
 
-### 2.2 PC backend (`yolo/`)
+### 2.2 Windows desktop target
 
-| Module | Responsibility |
-|---|---|
-| `cocinap/app.py` | Desktop GUI (PySide6): camera, config, alarms |
-| `cocinap/engine.py` | Engine: detection, analysis and timer coordination |
-| `cocinap/detector/` | `detector.py` (YOLO) and `runner.py` (inference loop) |
-| `cocinap/analyzer/risk_analyzer.py` | Risk and alarm computation (fire/smoke/unattended) |
-| `cocinap/camera/handler.py` | USB or IP camera capture (RTSP/HTTP) |
-| `cocinap/webui.py` | HTTP server: REST, MJPEG and SSE |
-| `cocinap/alarm/sound_alarm.py` | Sound alarm |
-| `cocinap/security/` | Authentication (`auth`), rate limiting, audit, crypto |
-| `cocinap/config.py` | Persistent configuration and parameter metadata |
+The Windows runner is part of `cocinap_mobile/windows/` and shares the Flutter
+UI, provider state, camera sources, monitoring timer and alerts. Webcam
+snapshots are captured about once per second because `camera_windows` does not
+provide an image stream. MoveNet Lightning detects one person per frame; this
+is a different model and output shape from mobile ML Kit.
 
-> The backend is **archived** under `yolo/` (see `yolo/README.md`); the mobile
-> app is the active technology and does not depend on it in standalone mode.
+When remote access is enabled, `RemoteCameraServer` exposes `/api/info` and
+`/api/stream` on port 8080. Tailscale Serve provides the private HTTPS endpoint
+used by the phone. The PC must remain awake with CocinaP running.
 
 ---
 
@@ -112,7 +96,7 @@ Layered architecture with the **Provider** pattern for state.
 ### 3.1 Standalone mode (on-device)
 
 ```
-CameraController ──frame──► PersonDetector (TFLite, SSD MobileNet v2)
+CameraController ──frame──► PersonDetector (ML Kit / MoveNet)
                                    │
                           n persons detected
                                    │
@@ -127,32 +111,30 @@ CameraController ──frame──► PersonDetector (TFLite, SSD MobileNet v2)
 ```
 
 1. The camera produces frames in YUV/RGB.
-2. `PersonDetector` resizes to `300x300x3` (uint8), runs the model and gets up
-   to 20 detections; it filters the "person" class.
+2. `PersonDetector` runs platform-specific pose detection locally and returns
+   person boxes and confidence scores.
 3. `StandaloneProvider` sets `personPresent` and resets the absence counter when
    someone is present.
 4. If the timer is running and the threshold elapses with no people, a local
    alert is fired.
 
-### 3.2 Connected mode (client-server)
+### 3.2 Remote desktop video (optional)
 
 ```
-Mobile app                                 PC backend
+Mobile app                                 CocinaP Windows
    │                                            │
-   │── GET /api/info  (X-API-Key) ─────────────►│  validates and returns version/IPs
+   │── GET /api/info  (X-API-Key) ─────────────►│  validates and returns camera status
    │◄───────────────────────────────────────────│
-   │── GET /api/stream?api_key=… ──────────────►│  continuous MJPEG
+   │── GET /api/stream (X-API-Key) ────────────►│  continuous MJPEG
    │◄══════════ JPEG frames ════════════════════│
-   │── GET /api/events?api_key=… ──────────────►│  SSE alarms
-   │◄══════════ data: {alarm} ══════════════════│
-   │── GET /api/status ────────────────────────►│  detection and timer status
-   │── POST /api/timer/start ──────────────────►│  timer control
 ```
 
-- The connection is established via **mDNS** (automatic), **QR** (payload
-  `url|api_key`) or **manual URL**.
-- All requests carry the `X-API-Key` header. Streams (MJPEG/SSE) pass it as the
-  `api_key` query param because raw sockets cannot easily set headers.
+- The user configures a Tailscale Serve HTTPS address ending in `.ts.net` and
+  the desktop API key in the mobile app. The phone must also be connected to
+  the same tailnet.
+- The mobile client sends the API key in the `X-API-Key` header, not in the
+  URL. This feature only consumes the info endpoint and video stream; PC alarms
+  and controls are not integrated into the mobile app.
 
 ---
 
@@ -160,13 +142,12 @@ Mobile app                                 PC backend
 
 | Context | Model | Input | Outputs | Where |
 |---|---|---|---|---|
-| Mobile app | SSD MobileNet V2 (COCO) | `1x300x300x3` uint8 | Up to 20 detections | On-device (TFLite) |
-| PC backend | YOLO11n (`yolo11n.pt`) | Resized image | fire, smoke, people | PC |
+| Android/iOS | ML Kit Pose Detection | Camera frame | Person poses | On-device |
+| Windows | MoveNet Lightning (`movenet_lightning.onnx`) | `1x192x192x4` uint8 | One 17-keypoint pose | On-device (ONNX Runtime) |
 
-- On the phone only **people** are detected (for the unattended mode). Fire and
-  smoke require the PC to be connected.
-- On the backend, `DETECT_SCALE` and `YOLO_IMGSZ` control inference cost/speed;
-  the model runs on CPU by default.
+Detection is local; remote video uses Tailscale and does not relay images
+through a CocinaP cloud service. Windows camera snapshots limit its camera
+stream to approximately one frame per second.
 
 ---
 
@@ -176,32 +157,29 @@ Mobile app                                 PC backend
 
 | Key | Use |
 |---|---|
-| `server_url`, `recent_servers` | Last URL and recent servers |
-| `api_key` | Backend API key |
-| `auto_connect` | Auto-connect on startup |
+| `server_url` | Remote Windows HTTPS address |
 | `standalone_*` | Duration, thresholds, confidence, camera source and URL |
+| `desktop_host_api_key` | Windows host key in platform secure storage |
+| `desktop_remote_host_enabled` | Whether the Windows MJPEG host starts |
 | `has_seen_install_guide`, `has_seen_app_tour` | First-run flags |
 | `app_language` | UI language (es/en) |
 
-### PC backend
-
-- `%APPDATA%\CocinaP\config.json` — parameters and `STOVE_ZONE`.
-- `%APPDATA%\CocinaP\logs\` — `eventos.log` and `crash.log`.
-- `%APPDATA%\CocinaP\firebase-key.json` — FCM key (optional).
+The Windows host key is stored using platform secure storage; it is only shown
+in Settings so the user can configure the phone.
 
 ---
 
 ## 6. Network communication
 
-- **Transport:** HTTP/1.1 over WiFi on the local network (trusted LAN).
-- **MJPEG:** `multipart/x-mixed-replace` at ~30 fps, JPEG quality 65, max width
-  480 px on the server side.
-- **SSE:** `text/event-stream` with heartbeats every 0.5 s.
-- **mDNS:** service `_cocinap._tcp.local.` with `version` and `auth` properties.
-- **Default port:** 8080 (`WEB_PORT`).
+- **Windows host:** HTTP on port 8080, bound to loopback by the Flutter app.
+- **Remote mobile stream:** HTTPS through Tailscale Serve, authenticated with
+  `X-API-Key`; never expose the port through router forwarding or Funnel.
+- **Endpoints:** `GET /api/info` and `GET /api/stream`.
+- **MJPEG rate:** follows the selected camera; Windows webcam snapshots are
+  captured at about one frame per second.
 
-> Security: the server is designed for a **trusted LAN**. Do not expose it to
-> the Internet. See [SECURITY](SECURITY.md).
+> Security: do not expose port 8080 to the Internet or use Tailscale Funnel.
+> See [SECURITY](SECURITY.md).
 
 ---
 
@@ -211,6 +189,7 @@ Mobile app                                 PC backend
 |---|---|---|
 | Android | Yes (foreground service) | Requires notification and data permissions |
 | iOS | Only while the app is open | System limitations for background work |
+| Windows | While the app is running | The PC must remain awake; webcam snapshots are about 1 FPS |
 
 On-device detection and local notifications do not use Firebase (FCM was removed
 from the mobile client so it can build without `google-services.json`).
@@ -225,13 +204,13 @@ from the mobile client so it can build without `google-services.json`).
                  │   Android   │        │     iOS     │
                  │  (Flutter)  │        │  (Flutter)  │
                  └──────┬──────┘        └──────┬──────┘
-                        │  WiFi LAN (optional) │
-                        └──────────┬───────────┘
+                        │ HTTPS Tailscale    │
+                        └──────────┬─────────┘
                                    │ HTTP :8080
                           ┌────────▼─────────┐
                           │   Windows PC     │
-                          │  CocinaP backend │
-                          │  (Python/YOLO)   │
+                          │ CocinaP Flutter  │
+                          │ MoveNet + MJPEG  │
                           └────────┬─────────┘
                                    │ USB / RTSP / HTTP
                           ┌────────▼─────────┐
@@ -246,10 +225,9 @@ from the mobile client so it can build without `google-services.json`).
 
 ```
 KitchenGuard/
-├── cocinap_mobile/     # Flutter app (main technology)
-├── yolo/               # Archived Python/YOLO backend
+├── cocinap_mobile/     # Flutter app for Android, iOS and Windows
 ├── docs/               # Documentation (es/ and en/)
-├── .github/workflows/  # CI: iOS build + Python CI
+├── .github/workflows/  # CI: mobile builds and CodeQL
 ├── CHANGELOG.md
 └── LICENSE
 ```

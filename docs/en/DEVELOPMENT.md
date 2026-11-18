@@ -19,16 +19,6 @@ flutter analyze
 flutter run
 ```
 
-### Backend (Python)
-
-```powershell
-cd yolo
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python main.py
-```
-
 ---
 
 ## 2. Repository structure
@@ -41,17 +31,13 @@ KitchenGuard/
 │   │   ├── content/           # Bilingual ES/EN strings
 │   │   ├── pages/             # Screens
 │   │   ├── providers/         # State (ChangeNotifier)
-│   │   ├── services/          # HTTP, mDNS, MJPEG, TFLite, prefs
+│   │   ├── services/          # HTTP, ONVIF, MJPEG, ML Kit/MoveNet, prefs
 │   │   └── widgets/           # Reusable components
-│   ├── android/  ios/         # Platform configuration
-│   ├── assets/models/         # TFLite model
+│   ├── android/ ios/ windows/ # Platform runners
+│   ├── assets/models/         # MoveNet ONNX model and notices
 │   └── test/                  # Widget tests
-├── yolo/                      # Python/YOLO backend (archived)
-│   ├── cocinap/               # Python package
-│   ├── tests/                 # pytest tests
-│   └── docs/                  # Backend docs
 ├── docs/                      # General docs (es/ and en/)
-├── .github/workflows/         # CI: ios.yml, python-ci.yml
+├── .github/workflows/         # CI: mobile builds and CodeQL
 ├── .editorconfig              # Code style
 ├── CHANGELOG.md
 └── LICENSE
@@ -79,7 +65,7 @@ KitchenGuard/
 | `services/api_service.dart` | REST HTTP client |
 | `services/discovery_service.dart` | mDNS discovery |
 | `services/mjpeg_service.dart` | MJPEG parser |
-| `services/person_detector.dart` | TFLite inference |
+| `services/person_detector.dart` | ML Kit on mobile, MoveNet on Windows |
 | `services/background_service.dart` | Background service |
 | `services/settings_service.dart` | Persistence |
 | `widgets/graphical.dart` | Rings, cards and timeline |
@@ -100,13 +86,6 @@ KitchenGuard/
 - **UI language:** use `content.dart` for all strings (no literals).
 - **No emojis** in the UI or code.
 - Before committing: `flutter analyze` must be clean.
-
-### Python
-
-- Follow `ruff` (config in `pyproject.toml`).
-- PEP 8 style, 4-space indentation.
-- No emojis.
-- `ruff check yolo/` and `ruff format yolo/`.
 
 ### Cross-cutting (`.editorconfig`)
 
@@ -141,18 +120,10 @@ flutter test               # tests
 flutter run                # run on device
 flutter build apk --release
 flutter build ipa --release
+flutter run -d windows
+flutter build windows --release
 flutter devices            # connected devices
 dart format .              # formatting
-```
-
-### Python (backend)
-
-```bash
-python main.py             # run the desktop app
-ruff check yolo/           # lint
-ruff format yolo/          # format
-pytest yolo/tests          # tests
-python build_app.py        # package .exe
 ```
 
 ---

@@ -7,6 +7,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/) and
 
 ---
 
+## [1.0.12] - Unreleased
+
+### Fixed
+
+- Normalize ONVIF-advertised service and RTSP hosts to the address of the
+  discovered camera when devices report a hostname or loopback address.
+- Add an edit action on discovered cameras with common, editable RTSP path
+  suggestions and instructions for finding the camera's IP and stream URL.
+
+### Changed
+
+- Advance the mobile package version to `1.0.12+12`.
+- Add the Flutter Windows desktop target with local MoveNet Lightning person
+  detection and authenticated remote camera streaming through Tailscale Serve.
+- Keep existing phone-camera and local IP-camera workflows available.
+- Remove the separate Python/YOLO desktop application; fire/smoke detection and
+  its desktop alarms are not included in the Flutter Windows target.
+
+---
+
 ## [1.0.11] - Unreleased
 
 ### Fixed

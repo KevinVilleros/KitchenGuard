@@ -1,7 +1,7 @@
 # CocinaP Documentation
 
-Central documentation index for **CocinaP** (Flutter mobile application and
-optional Python/YOLO backend). Documentation is available in **English**
+Central documentation index for **CocinaP** (Flutter Android, iOS and Windows
+application). Documentation is available in **English**
 (`docs/en/`) and **Spanish** (`docs/es/`). English is the repository-wide
 default.
 
@@ -14,7 +14,7 @@ default.
 | Document | Description |
 |---|---|
 | [Architecture](en/ARCHITECTURE.md) | Overview, components, data flow and diagrams |
-| [Installation & build](en/INSTALLATION.md) | Requirements, environment, Android/iOS build and backend run |
+| [Installation & build](en/INSTALLATION.md) | Requirements, environment, Android/iOS/Windows build and remote video setup |
 | [User guide](en/USER_GUIDE.md) | Full guide for using the app and the system |
 | [REST API reference](en/API.md) | Backend endpoints, authentication and examples |
 | [Development guide](en/DEVELOPMENT.md) | Environment, conventions, structure and workflow |
@@ -31,7 +31,7 @@ default.
 | Documento | Descripción |
 |---|---|
 | [Arquitectura](es/ARCHITECTURE.md) | Visión general, componentes, flujo de datos y diagramas |
-| [Instalación y compilación](es/INSTALLATION.md) | Requisitos, entorno, build Android/iOS y ejecución del backend |
+| [Instalación y compilación](es/INSTALLATION.md) | Requisitos, entorno, build Android/iOS/Windows y video remoto |
 | [Manual de usuario](es/USER_GUIDE.md) | Guía completa de uso de la app y del sistema |
 | [Referencia de API REST](es/API.md) | Endpoints, autenticación y ejemplos del backend |
 | [Guía de desarrollo](es/DEVELOPMENT.md) | Entorno, convenciones, estructura y flujo de trabajo |
@@ -59,7 +59,6 @@ default.
 | [Third-party notices](legal/THIRD_PARTY_NOTICES.md) | EN | Preliminary native player license review |
 | [iOS from Windows](INSTALL_IOS_WINDOWS.es.md) | Spanish | Build and install with GitHub Actions |
 | [Mobile app README](../cocinap_mobile/README.md) | EN + ES | Android and iPhone app |
-| [Archived YOLO backend](../yolo/README.md) | EN + ES | Optional Python/Windows backend |
 
 ---
 

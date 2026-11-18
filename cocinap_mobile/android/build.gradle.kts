@@ -21,6 +21,16 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
+    if (name == "camera_android_camerax") {
+        pluginManager.withPlugin("com.android.library") {
+            dependencies.add(
+                "implementation",
+                "androidx.concurrent:concurrent-futures:1.1.0",
+            )
+        }
+    }
+}
+subprojects {
     project.evaluationDependsOn(":app")
 }
 

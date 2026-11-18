@@ -6,7 +6,9 @@
 
 ## 1. Introducción
 
-CocinaP ("nosotros", "la aplicación", "el Servicio") es una aplicación de seguridad inteligente para la cocina que ayuda a detectar fuego, humo y la presencia de personas, y a prevenir situaciones de riesgo durante la cocción.
+CocinaP ("nosotros", "la aplicación", "el Servicio") monitorea la cocina,
+detecta personas en la cámara y alerta cuando parece estar desatendida. No
+detecta fuego ni humo.
 
 Esta Política de Privacidad explica qué datos tratamos, cómo los usamos y qué derechos tienes como usuario.
 
@@ -22,9 +24,17 @@ Esta Política de Privacidad explica qué datos tratamos, cómo los usamos y qu�
 
 ## 2. Principio fundamental: procesamiento local en tu dispositivo
 
-El diseño de CocinaP prioriza tu privacidad. **Las imágenes de las cámaras se procesan directamente en tu dispositivo** (en el teléfono móvil o en el ordenador donde está instalado el sistema).
+El diseño de CocinaP prioriza tu privacidad. En modo local, las imágenes de
+las cámaras se procesan directamente en el teléfono o PC Windows con CocinaP.
 
-**No enviamos imágenes a servidores de CocinaP ni ofrecemos almacenamiento de video en la nube.** Si conectas el modo PC, el stream se recibe de tu propio ordenador por la red configurada. Si conectas una cámara IP, el video se solicita directamente a ella; el análisis de presencia del móvil es local.
+**CocinaP no ofrece almacenamiento de video en la nube ni recibe tus imágenes
+en servidores operados por CocinaP.** Si configuras video remoto de Windows,
+el stream viaja desde tu PC al teléfono por tu red privada Tailscale
+mediante HTTPS. Tailscale puede retransmitir tráfico de red cifrado; consulta
+la información de privacidad de Tailscale para conocer sus servicios y los
+metadatos de red que trata. La app móvil solicita el video de una cámara IP
+directamente; la detección de personas se ejecuta localmente en el teléfono o
+el PC Windows.
 
 Puedes consultar esta implementación técnica en el manual y la arquitectura del proyecto (ver `docs/ARCHITECTURE.md`).
 
@@ -36,7 +46,9 @@ La aplicación puede solicitar los siguientes permisos y tratar los siguientes d
 
 ### 3.1 Permisos de cámara
 - **Finalidad:** capturar el video en vivo de la cocina para analizar la presencia de focos de riesgo y de personas.
-- **Nota:** la grabación es local. Las imágenes analizadas no se suben a servidores externos salvo que tú configures servicios de sincronización o notificaciones que lo requieran (ver apartado 4).
+- **Nota:** CocinaP no graba ni sube el video de la cámara a sus propios
+  servidores. Si habilitas video remoto de escritorio, el video se transmite
+  entre tu PC y el teléfono mediante Tailscale (ver apartado 5).
 
 ### 3.2 Permisos de almacenamiento
 - **Finalidad:** guardar la configuración de la aplicación (preferencias, URLs de cámaras, ajustes de detección) de manera local en tu dispositivo.
@@ -49,14 +61,21 @@ La aplicación puede solicitar los siguientes permisos y tratar los siguientes d
 - Las preferencias que introduces (p. ej., duración del monitoreo, tiempo de alerta, confianza de detección, configuración de la cámara IP) se guardan **localmente** en tu dispositivo.
 
 ### 3.5 Uso de la cámara de terceros (cámaras IP)
-- La aplicación puede descubrir cámaras ONVIF anunciadas en tu red local o conectarse a un stream RTSP/HTTP-MJPEG que tú configures. Las credenciales ONVIF se usan para solicitar el stream en la red local; la URL de stream, incluidas las credenciales cuando corresponda, se guarda en el almacenamiento seguro del dispositivo. El video se analiza localmente.
+- La aplicación puede descubrir cámaras ONVIF anunciadas en tu red local o
+  conectarse a un stream RTSP/HTTP-MJPEG que tú configures. Las credenciales
+  ONVIF se usan para solicitar el stream en la red local; la URL del stream,
+  incluidas las credenciales cuando corresponda, se guarda en el almacenamiento
+  seguro del dispositivo. El video se analiza localmente.
 - **Responsabilidad del usuario:** eres responsable de tener autorización para conectarte a esas cámaras y de cumplir con las leyes de privacidad y videovigilancia aplicables en tu jurisdicción (p. ej., informar a las personas que puedan ser captadas, y no instalar las cámaras en zonas donde la expectativa de privacidad sea alta, como baños o dormitorios).
 
 ---
 
 ## 4. Detección de personas e imágenes
 
-La aplicación usa modelos de inteligencia artificial y visión por computadora (p. ej., un modelo TFLite de detección de personas) para determinar si hay una persona presente en el campo de visión de la cámara, con el objetivo de avisarte si la cocina queda desatendida.
+La aplicación usa modelos locales de visión por computadora para determinar si
+hay una persona en el campo de visión de la cámara: ML Kit Pose Detection en
+Android/iOS y MoveNet Lightning mediante ONNX Runtime en Windows. El objetivo es
+avisarte si la cocina queda desatendida.
 
 - **Procesamiento local:** el modelo se ejecuta en el dispositivo. No se almacena ni se transmite el registro de momentos en que se detecta o no una persona, salvo el historial de alertas local.
 - **No se crean perfiles:** no usamos la detección para crear perfiles de comportamiento, identificación biométrica ni seguimiento de individuos.
@@ -68,7 +87,12 @@ La aplicación usa modelos de inteligencia artificial y visión por computadora 
 
 **No vendemos ni alquilamos** tus datos personales.
 
-La aplicación no transmite tu configuración ni las imágenes analizadas a servidores de CocinaP **mientras no configures funciones que requieran conectividad explícita** (por ejemplo, la conexión al servidor/compañero CocinaP que tú mismo instalas y controlas).
+La aplicación no transmite tu configuración ni las imágenes analizadas a
+servidores de CocinaP. Si configuras video remoto de escritorio, envía la
+dirección del escritorio y la clave API al PC y recibe su stream de video por
+la red Tailscale. La app móvil guarda la dirección Windows y la clave API en el
+almacenamiento seguro del teléfono; CocinaP Windows guarda su clave host en el
+almacenamiento seguro de Windows.
 
 ### Sobre las notificaciones push (información adicional)
 La versión actual utiliza notificaciones locales y no integra notificaciones push remotas. El comportamiento de las notificaciones depende de la plataforma y de los permisos concedidos.

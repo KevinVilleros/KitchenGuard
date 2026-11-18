@@ -69,12 +69,30 @@ Al añadir UI, prueba en pantallas pequeñas (~411x921 lógicos).
 - Si no aparece, la cámara puede no admitir ONVIF o el router puede aislar a los
   dispositivos Wi-Fi. Prueba la opción manual solo si tienes la URL **RTSP** o
   **HTTP/MJPEG** completa; la IP por sí sola no identifica el stream.
+- Si aparece pero falla ONVIF, toca el lápiz junto a la cámara para usar la IP
+  encontrada y editar rutas RTSP de ejemplo. Prueba la ruta y las credenciales
+  RTSP indicadas en la app oficial, la página de configuración o el manual; las
+  rutas sugeridas pueden no corresponder al modelo.
 - V380 Pro es el nombre de una app y no garantiza que todos los modelos
   asociados expongan ONVIF/RTSP. El modelo **AIT36106** no se ha validado con
   CocinaP.
 - En iPhone, esta versión no puede buscar ONVIF por multicast porque requiere
   una autorización de Apple que no está incluida. Vuelve al campo manual y usa
   una URL de stream compatible.
+
+### No puedo conectar con CocinaP Windows desde fuera de casa
+
+- Comprueba que Tailscale aparece conectado en el teléfono y en la PC y que
+  ambos están en la misma red privada.
+- En la PC, confirma que CocinaP está abierto, que el acceso remoto esté
+  activado en Ajustes y ejecuta
+  `tailscale serve status`. Usa la dirección HTTPS completa terminada en
+  `.ts.net`; la app rechaza HTTP y direcciones públicas.
+- Copia de nuevo la clave API desde Ajustes de Windows. La app la envía por
+  encabezado HTTPS; no la pegues en la URL.
+- No abras ni reenvíes el puerto 8080 del router y no uses Tailscale Funnel.
+- Mantén la PC Windows encendida y el monitoreo activo. Las alertas del
+  escritorio no se sincronizan con el teléfono.
 
 ### La detección de personas no alerta
 
@@ -115,27 +133,36 @@ Demasiadas peticiones seguidas. Espera el tiempo de `Retry-After` y reintenta.
 
 ---
 
-## 4. Backend (PC)
+## 4. App de Windows
 
-### `pip install` falla al compilar dependencias
+### El build solicita el modo de desarrollador
 
-Instala **Build Tools para Visual Studio** (requerido por algunos paquetes como
-numpy/opencv/PySide6).
+Activa el modo de desarrollador de Windows y vuelve a ejecutar `flutter pub get`.
 
-### El modelo YOLO no carga
+### El build de Windows no encuentra herramientas C++
 
-- Comprueba que existe `yolo/models/yolo11n.pt`.
-- En modo empaquetado, el modelo se resuelve vía `sys._MEIPASS`.
+Instala Visual Studio 2022 con la carga de trabajo **Desarrollo para el
+escritorio con C++**.
 
-### No hay señal de cámara en el PC
+### No carga el modelo MoveNet
 
-- Verifica la cámara en **Config** (USB o URL RTSP/HTTP).
-- Cierra otras apps que usen la cámara.
-- Reinicia la app tras cambiar el dispositivo/URL (requiere reinicio).
+Confirma que el paquete incluya `assets/models/movenet_lightning.onnx` y vuelve
+a compilar después de cambiar dependencias. Consulta el error en el log de
+depuración de Flutter.
 
-### El puerto 8080 está ocupado
+### No hay señal de cámara en Windows
 
-Cámbialo en `config.json` (`WEB_PORT`) o libera el puerto.
+- Revisa los permisos de cámara en **Configuración > Privacidad y seguridad**.
+- Cierra otras apps que usen la webcam y vuelve a seleccionar la fuente.
+- La webcam se captura por instantáneas (~1 FPS); usa una cámara IP para un
+  stream continuo de mayor frecuencia.
+
+### El stream remoto no está disponible
+
+- Mantén CocinaP ejecutándose en el PC y comprueba que la cámara esté activa.
+- Confirma Tailscale en ambos dispositivos y que `tailscale serve status`
+  muestre la dirección `.ts.net` esperada.
+- Verifica la clave API y no expongas el puerto 8080 mediante el router.
 
 ---
 
@@ -145,7 +172,7 @@ Cámbialo en `config.json` (`WEB_PORT`) o libera el puerto.
 No. El modo independiente funciona solo con el teléfono (detección de personas).
 
 **¿Detecta fuego y humo sin PC?**
-No. Fuego y humo requieren el backend del PC conectado.
+No. Actualmente CocinaP solo detecta personas.
 
 **¿Se suben mis videos a Internet?**
 No. Todo el procesamiento es local (dispositivo o tu PC).

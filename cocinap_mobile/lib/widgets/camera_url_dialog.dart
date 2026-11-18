@@ -35,6 +35,21 @@ Uri buildStream2FallbackUri(OnvifCamera camera) => Uri(
       path: '/stream2',
     );
 
+@visibleForTesting
+List<Uri> buildRtspCandidateUris(String cameraAddress) {
+  const paths = [
+    '/stream1',
+    '/stream2',
+    '/live',
+    '/Streaming/Channels/101',
+    '/cam/realmonitor?channel=1&subtype=0',
+    '/h264Preview_01_main',
+  ];
+  return paths
+      .map((path) => Uri.parse('rtsp://$cameraAddress:554$path'))
+      .toList();
+}
+
 class _CameraUrlDialog extends StatefulWidget {
   final String currentUrl;
   final bool english;
@@ -72,6 +87,13 @@ class _CameraUrlDialogState extends State<_CameraUrlDialog> {
                 ? 'Search for ONVIF cameras on your Wi-Fi, or enter a camera stream URL. HTTP/MJPEG and RTSP are supported; an IP address alone may not be enough.'
                 : 'Busca cámaras ONVIF en tu Wi-Fi o escribe la URL del stream. Se admiten HTTP/MJPEG y RTSP; la dirección IP sola puede no bastar.',
             style: const TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            english
+                ? 'Find the camera IP in your router’s connected-device list or the camera app. If ONVIF setup fails after discovery, tap the edit icon beside the camera to enter an RTSP path.'
+                : 'Encuentra la IP en la lista de dispositivos conectados del router o en la app de la cámara. Si ONVIF falla después de encontrarla, toca el lápiz junto a la cámara para introducir la ruta RTSP.',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
@@ -301,19 +323,25 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
     final camera = _failedCamera;
     if (camera == null) return;
     await _showManualRtspDialog(
+      camera: camera,
       initialUri: buildStream2FallbackUri(camera),
     );
   }
 
-  Future<void> _showManualRtspDialog({Uri? initialUri}) async {
-    final camera = _failedCamera;
-    if (camera == null) return;
+  Future<void> _showManualRtspDialog({
+    OnvifCamera? camera,
+    Uri? initialUri,
+  }) async {
+    final selectedCamera = camera ?? _failedCamera;
+    if (selectedCamera == null) return;
+    final credentials =
+        identical(selectedCamera, _failedCamera) ? _failedCredentials : null;
     final url = await showDialog<Uri>(
       context: context,
       builder: (context) => _ManualRtspDialog(
-        camera: camera,
+        camera: selectedCamera,
         english: widget.english,
-        initialCredentials: _failedCredentials,
+        initialCredentials: credentials,
         initialUri: initialUri,
       ),
     );
@@ -410,6 +438,15 @@ class _OnvifCameraDialogState extends State<_OnvifCameraDialog> {
                                 leading: const Icon(Icons.videocam),
                                 title: Text(camera.name),
                                 subtitle: Text(camera.address),
+                                trailing: IconButton(
+                                  tooltip: english
+                                      ? 'Enter RTSP path manually'
+                                      : 'Introducir ruta RTSP manualmente',
+                                  onPressed: () => _showManualRtspDialog(
+                                    camera: camera,
+                                  ),
+                                  icon: const Icon(Icons.edit),
+                                ),
                                 onTap: () => _connect(camera),
                               ),
                           ],
@@ -473,43 +510,75 @@ class _ManualRtspDialogState extends State<_ManualRtspDialog> {
     final english = widget.english;
     return AlertDialog(
       title: Text(english ? 'Enter RTSP address' : 'Escribe la dirección RTSP'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            english
-                ? 'Use the RTSP address provided by the camera or its app. The address must point to this camera (${widget.camera.address}).'
-                : 'Usa la dirección RTSP indicada por la cámara o su aplicación. La dirección debe corresponder a esta cámara (${widget.camera.address}).',
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.65,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                english
+                    ? 'Camera IP found: ${widget.camera.address}. Use an RTSP address from the camera app, web settings, label, or manual. ONVIF and RTSP may use different usernames and passwords.'
+                    : 'IP encontrada: ${widget.camera.address}. Busca la dirección RTSP en la app, ajustes web, etiqueta o manual de la cámara. ONVIF y RTSP pueden usar usuarios y contraseñas distintos.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _controller,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText:
+                      english ? 'RTSP stream URL' : 'URL del stream RTSP',
+                  hintText: 'rtsp://${widget.camera.address}:554/stream',
+                  border: const OutlineInputBorder(),
+                  errorText: _error,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                english
+                    ? 'Common path examples (model-dependent):'
+                    : 'Ejemplos de rutas frecuentes (dependen del modelo):',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final candidate
+                      in buildRtspCandidateUris(widget.camera.address))
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text(candidate.path),
+                      onPressed: () => setState(() {
+                        _controller.text = candidate.toString();
+                        _error = null;
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _usernameController,
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText: english ? 'RTSP username' : 'Usuario RTSP',
+                ),
+              ),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: english ? 'RTSP password' : 'Contraseña RTSP',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _controller,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: english ? 'RTSP stream URL' : 'URL del stream RTSP',
-              hintText: 'rtsp://${widget.camera.address}:554/stream',
-              border: const OutlineInputBorder(),
-              errorText: _error,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _usernameController,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: english ? 'RTSP username' : 'Usuario RTSP',
-            ),
-          ),
-          TextField(
-            controller: _passwordController,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: english ? 'RTSP password' : 'Contraseña RTSP',
-            ),
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(

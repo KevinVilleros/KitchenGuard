@@ -9,9 +9,8 @@ proyecto.
 
 | Capa | Herramienta | Ubicación | Qué cubre |
 |---|---|---|---|
-| App móvil | `flutter_test` | `cocinap_mobile/test/` | Widgets y arranque |
-| Backend | `pytest` | `yolo/tests/` | Config, motor, analizador, seguridad |
-| Análisis estático | `flutter analyze`, `ruff` | — | Lint y tipos |
+| App Flutter | `flutter_test` | `cocinap_mobile/test/` | Widgets, detector, API remota |
+| Análisis estático | `flutter analyze` | `cocinap_mobile/` | Lint y tipos |
 
 ---
 
@@ -50,29 +49,17 @@ flutter test --coverage
 
 ---
 
-## 3. Pruebas del backend
+## 3. Pruebas Windows y acceso remoto
 
 ```bash
-cd yolo
-pytest
+cd cocinap_mobile
+flutter test test/windows_person_detector_test.dart test/remote_camera_server_test.dart test/remote_desktop_service_test.dart
 ```
 
-Suites existentes:
-
-| Archivo | Área |
-|---|---|
-| `test_config.py` | Carga y guardado de configuración |
-| `test_engine.py` | Motor de detección/estado |
-| `test_analyzer.py` | Analizador de riesgo |
-| `test_runner.py` | Bucle de inferencia |
-| `test_security.py` | Auth, rate limit y auditoría |
-| `test_package.py` | Empaquetado |
-
-Con cobertura:
-
-```bash
-pytest --cov=cocinap yolo/tests
-```
+Estas pruebas cubren el parseo MoveNet, autenticación con API key, respuesta de
+disponibilidad de cámara y validación de direcciones remotas. No sustituyen un
+build Windows, pruebas con webcam/RTSP ni una prueba Tailscale de extremo a
+extremo.
 
 ---
 
@@ -84,9 +71,6 @@ cd cocinap_mobile
 flutter analyze
 dart format --set-exit-if-changed .
 
-# Backend
-ruff check yolo/
-ruff format --check yolo/
 ```
 
 ---
@@ -132,14 +116,6 @@ El job `build-signed` solo firma si están definidos los secretos
 `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD` y `IOS_PROVISIONING_PROFILE`; en
 caso contrario se omite.
 
-### 5.2 `python-ci.yml` — "Python CI (yolo backend)"
-
-| Aspecto | Detalle |
-|---|---|
-| Disparador | cambios en `yolo/**` |
-| `working-directory` | `yolo` |
-| Acciones | lint (`ruff`) y tests (`pytest`) del backend |
-
 ---
 
 ## 6. Entrega continua (releases)
@@ -170,18 +146,18 @@ se puede subir ese artefacto a Google Play.
 4. Genera el AAB con `flutter build appbundle --release` y verifica la firma
    antes de subirlo a Play Console.
 
-### Backend
+### Escritorio Windows
 
-- `python build_app.py` empaqueta el `.exe` (PyInstaller).
-- `python build_all.py` hace el build completo (app + instalador).
+- Requiere el modo de desarrollador de Windows y Visual Studio 2022 con
+  **Desarrollo para el escritorio con C++**.
+- Compila con `flutter build windows --release`; el repositorio aún no publica
+  artefactos Windows de CI.
 
 ---
 
 ## 7. Versionado
 
 - Se sigue **Semantic Versioning** (`MAJOR.MINOR.PATCH`).
-- La versión del backend está en `yolo/cocinap/__init__.py` y
-  `yolo/cocinap/resources/version.txt`.
 - La versión de la app está en `cocinap_mobile/pubspec.yaml`.
 - Los cambios se registran en [CHANGELOG.md](../CHANGELOG.md) (formato Keep a
   Changelog).
@@ -194,6 +170,7 @@ se puede subir ese artefacto a Google Play.
 - [ ] `flutter test` en verde.
 - [ ] APK e IPA reproducibles desde artefactos documentados.
 - [ ] Matriz Android e iPhone completada en dispositivos reales.
+- [ ] Build Windows y cámara/detector probados en hardware Windows.
 - [ ] Matriz real de cámaras ONVIF, RTSP y MJPEG probada y publicada; registrar
   modelos incompatibles y pruebas negativas.
 - [ ] Licencias y avisos de libmpv, FFmpeg/codecs y dependencias nativas
@@ -203,8 +180,7 @@ se puede subir ese artefacto a Google Play.
   completadas y revisadas legalmente.
 - [ ] Permisos de cámara, red local y segundo plano probados en dispositivo.
 - [ ] Los errores conocidos tienen propietario, impacto y plan de corrección.
-- [ ] `ruff check` y `pytest` en verde (backend).
-- [ ] Versión bump en `pubspec.yaml` y backend.
+- [ ] Versión bump en `pubspec.yaml`.
 - [ ] Entrada nueva en `CHANGELOG.md`.
 - [ ] Workflow de iOS completado con éxito.
 - [ ] Artefacto `.ipa` verificado.

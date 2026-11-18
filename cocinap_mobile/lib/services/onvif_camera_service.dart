@@ -154,24 +154,31 @@ class OnvifCameraService {
   @visibleForTesting
   static OnvifCamera? parseProbeResponse(String response, String senderIp) {
     final document = XmlDocument.parse(response);
-    final endpointText = _elements(document, 'XAddrs')
+    final endpoints = _elements(document, 'XAddrs')
         .map((element) => element.innerText.trim())
         .where((value) => value.isNotEmpty)
         .expand((value) => value.split(RegExp(r'\s+')))
-        .firstWhere(
-      (value) {
-        final uri = Uri.tryParse(value);
-        return uri != null &&
-            uri.scheme == 'http' &&
-            uri.host == senderIp &&
-            uri.userInfo.isEmpty &&
-            uri.host.isNotEmpty;
-      },
-      orElse: () => '',
+        .where(
+          (value) =>
+              _normalizeCameraEndpoint(
+                value,
+                scheme: 'http',
+                host: senderIp,
+              ) !=
+              null,
+        )
+        .toList();
+    final endpointText = endpoints.firstWhere(
+      (value) => Uri.parse(value).host == senderIp,
+      orElse: () => endpoints.firstOrNull ?? '',
     );
     if (endpointText.isEmpty) return null;
 
-    final deviceService = Uri.parse(endpointText);
+    final deviceService = _normalizeCameraEndpoint(
+      endpointText,
+      scheme: 'http',
+      host: senderIp,
+    )!;
     final scopes = _elements(document, 'Scopes')
         .map((element) => element.innerText.trim())
         .join(' ');
@@ -191,6 +198,31 @@ class OnvifCameraService {
     );
   }
 
+  @visibleForTesting
+  static Uri? normalizeCameraEndpoint(
+    String value, {
+    required String scheme,
+    required String host,
+  }) =>
+      _normalizeCameraEndpoint(value, scheme: scheme, host: host);
+
+  static Uri? _normalizeCameraEndpoint(
+    String value, {
+    required String scheme,
+    required String host,
+  }) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null ||
+        !uri.hasAuthority ||
+        uri.scheme.toLowerCase() != scheme ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        host.isEmpty) {
+      return null;
+    }
+    return uri.replace(scheme: scheme, host: host);
+  }
+
   Future<Uri> getStreamUri(
     OnvifCamera camera, {
     required String username,
@@ -208,21 +240,25 @@ class OnvifCameraService {
         .where((element) => element.localName == 'XAddr')
         .map((element) => element.innerText.trim())
         .firstWhere(
-      (value) {
-        final uri = Uri.tryParse(value);
-        return uri != null &&
-            uri.scheme == 'http' &&
-            uri.host == camera.address &&
-            uri.userInfo.isEmpty;
-      },
-      orElse: () => '',
-    );
+          (value) =>
+              _normalizeCameraEndpoint(
+                value,
+                scheme: 'http',
+                host: camera.address,
+              ) !=
+              null,
+          orElse: () => '',
+        );
     if (mediaEndpointText.isEmpty) {
       throw const FormatException(
           'Camera did not provide a local media service.');
     }
 
-    final mediaEndpoint = Uri.parse(mediaEndpointText);
+    final mediaEndpoint = _normalizeCameraEndpoint(
+      mediaEndpointText,
+      scheme: 'http',
+      host: camera.address,
+    )!;
     final profiles = await _soapRequest(
       mediaEndpoint,
       'http://www.onvif.org/ver10/media/wsdl/GetProfiles',
@@ -246,10 +282,14 @@ class OnvifCameraService {
     final streamText = _elements(streamResponse, 'Uri')
         .map((element) => element.innerText.trim())
         .firstOrNull;
-    final streamUri = streamText == null ? null : Uri.tryParse(streamText);
-    if (streamUri == null ||
-        streamUri.scheme.toLowerCase() != 'rtsp' ||
-        streamUri.host != camera.address) {
+    final streamUri = streamText == null
+        ? null
+        : _normalizeCameraEndpoint(
+            streamText,
+            scheme: 'rtsp',
+            host: camera.address,
+          );
+    if (streamUri == null) {
       throw const FormatException(
           'Camera returned an invalid local RTSP stream.');
     }

@@ -1,9 +1,5 @@
-# ─── Modelos ──────────────────────────────────
-yolo/models/*.pt
-
 # ─── Videos de prueba ────────────────────────
 data/videos/*.mp4
-yolo/data/videos/*.mp4
 
 # ─── Python ───────────────────────────────────
 __pycache__/
@@ -15,6 +11,7 @@ venv/
 .venv/
 env/
 *.so
+node_modules/
 
 # ─── Logs ─────────────────────────────────────
 *.log
@@ -38,16 +35,6 @@ Thumbs.db
 .DS_Store
 Desktop.ini
 
-# ─── PyInstaller build artifacts ─────────────
-build/
-dist/
-*.spec
-stdout_build.txt
-stderr_build.txt
-
-# ─── Duplicate models in root ────────────────
-*.pt
-
 # ─── Flutter / Dart ──────────────────────────
 cocinap_mobile/.dart_tool/
 cocinap_mobile/.packages
@@ -56,6 +43,7 @@ cocinap_mobile/.flutter-plugins
 cocinap_mobile/.flutter-plugins-dependencies
 cocinap_mobile/.pub/
 cocinap_mobile/android/.gradle/
+cocinap_mobile/android/.kotlin/
 cocinap_mobile/android/app/build/
 cocinap_mobile/android/build/
 cocinap_mobile/android/local.properties
@@ -69,6 +57,7 @@ cocinap_mobile/ios/Flutter/App.framework
 *.apk
 CocinaP-*.zip
 CocinaP-iOS-unzipped/
+**/.wrangler/
 
 # ─── Herramientas locales de IA ───────────────
 .opencode/

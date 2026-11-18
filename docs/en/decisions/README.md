@@ -29,7 +29,7 @@ Positive, negative and neutral.
 |---|---|---|
 | [0001](0001-flutter-first.md) | Flutter as the main technology | Accepted |
 | [0002](0002-remove-firebase.md) | Remove Firebase/FCM from the mobile client | Accepted |
-| [0003](0003-on-device-tflite.md) | On-device detection with TFLite | Accepted |
+| [0003](0003-on-device-person-detection.md) | On-device person detection | Accepted |
 | [0004](0004-provider-state.md) | State management with Provider | Accepted |
-| [0005](0005-archive-yolo-backend.md) | Archive the YOLO backend under `yolo/` | Accepted |
+| [0005](0005-archive-yolo-backend.md) | Retire the archived Python desktop backend | Accepted |
 | [0006](0006-cloud-ios-build.md) | Build iOS in the cloud with GitHub Actions | Accepted |
