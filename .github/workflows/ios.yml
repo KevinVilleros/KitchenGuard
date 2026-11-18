@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: flutter-build-log
           path: |
@@ -120,7 +120,7 @@ jobs:
           cp -r build/ios/iphoneos/*.app Payload/
           zip -r CocinaP-unsigned.ipa Payload
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: CocinaP-iOS
           path: cocinap_mobile/CocinaP-unsigned.ipa
@@ -152,7 +152,7 @@ jobs:
       - name: Build installable Android debug APK
         run: flutter build apk --debug
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: CocinaP-Android-debug
           path: cocinap_mobile/build/app/outputs/flutter-apk/app-debug.apk
@@ -218,7 +218,7 @@ jobs:
 
       - name: Subir IPA firmado (si existe)
         if: ${{ hashFiles('cocinap_mobile/build/ios/ipa/*.ipa') != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CocinaP-iOS-signed
           path: cocinap_mobile/build/ios/ipa/*.ipa
